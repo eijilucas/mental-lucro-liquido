@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { useSession } from "../lib/useSession";
 
 export function Login() {
+  const { session, loading: sessionLoading } = useSession();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +33,8 @@ export function Login() {
     }
     setBusy(false);
   }
+
+  if (!sessionLoading && session) return <Navigate to="/" replace />;
 
   return (
     <div className="app" style={{ maxWidth: 380, paddingTop: 96 }}>
