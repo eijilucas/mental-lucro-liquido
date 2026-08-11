@@ -1,4 +1,5 @@
 import { TopBar, AdminLink } from "../components/TopBar";
+import { SignOutButton } from "../components/RequireAuth";
 import { recentSales, monthlyDre, skuMargin, monthlyOverhead } from "../data/mockData";
 
 function money(v: number) {
@@ -37,6 +38,7 @@ export function Dashboard() {
             ⇩
           </div>
           <AdminLink />
+          <SignOutButton />
         </div>
       </TopBar>
 

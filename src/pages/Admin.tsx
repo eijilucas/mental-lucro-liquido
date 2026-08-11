@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TopBar, AdminBackLink } from "../components/TopBar";
+import { SignOutButton } from "../components/RequireAuth";
 import { monthlyOverhead, feeRates, productCosts, changeLog, monthlyDre } from "../data/mockData";
 import type { OverheadRow } from "../data/mockData";
 
@@ -28,7 +29,10 @@ export function Admin() {
   return (
     <div className="app">
       <TopBar subtitle="lucro líquido · admin">
-        <AdminBackLink />
+        <div className="topbar-controls">
+          <AdminBackLink />
+          <SignOutButton />
+        </div>
       </TopBar>
 
       <h1 className="page-title">Custos e taxas</h1>
