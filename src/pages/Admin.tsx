@@ -219,7 +219,7 @@ export function Admin() {
                   <div>
                     <div className="panel-title">Gastos do mês — {monthLabel(currentMonthStart())}</div>
                     <div className="panel-hint">
-                      Cada gasto pode ser dividido de três jeitos: igual entre todas as peças vendidas, proporcional ao valor de cada venda, ou um valor fixo por peça (CAC) que você já sabe de cor.
+                      Cada gasto pode ser fixo (o mesmo valor pra toda peça vendida) ou variável (proporcional ao valor de cada venda).
                     </div>
                   </div>
                 </div>
@@ -230,7 +230,7 @@ export function Admin() {
                         <th style={{ width: 80 }}>Tipo</th>
                         <th>Nome do gasto</th>
                         <th className="num" style={{ width: 120 }}>Valor</th>
-                        <th style={{ width: 250 }}>Como dividir</th>
+                        <th style={{ width: 170 }}>Como dividir</th>
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
@@ -248,27 +248,19 @@ export function Admin() {
                             <div className="method-toggle">
                               <button
                                 type="button"
-                                title="Divide o gasto igualmente entre todas as peças vendidas no mês"
+                                title="Mesmo valor pra toda peça vendida no mês, dividido igualmente"
                                 className={row.allocation_method === "per_unit" ? "active" : ""}
                                 onClick={() => handleMethodChange(row.id, "per_unit")}
                               >
-                                Por peça
+                                Fixo
                               </button>
                               <button
                                 type="button"
-                                title="Divide o gasto proporcional ao valor de cada venda"
+                                title="Valor proporcional ao preço de cada venda — quem vendeu mais caro absorve mais"
                                 className={row.allocation_method === "per_revenue" ? "active" : ""}
                                 onClick={() => handleMethodChange(row.id, "per_revenue")}
                               >
-                                Por venda
-                              </button>
-                              <button
-                                type="button"
-                                title="Aplica esse valor direto em cada peça vendida, sem depender do total do mês — use quando já souber o CAC (gasto ÷ conversões)"
-                                className={row.allocation_method === "fixed_per_unit" ? "active" : ""}
-                                onClick={() => handleMethodChange(row.id, "fixed_per_unit")}
-                              >
-                                CAC fixo
+                                Variável
                               </button>
                             </div>
                           </td>
@@ -308,27 +300,19 @@ export function Admin() {
                           <div className="method-toggle">
                             <button
                               type="button"
-                              title="Divide o gasto igualmente entre todas as peças vendidas no mês"
+                              title="Mesmo valor pra toda peça vendida no mês, dividido igualmente"
                               className={newOverhead.method === "per_unit" ? "active" : ""}
                               onClick={() => setNewOverhead((s) => ({ ...s, method: "per_unit" }))}
                             >
-                              Por peça
+                              Fixo
                             </button>
                             <button
                               type="button"
-                              title="Divide o gasto proporcional ao valor de cada venda"
+                              title="Valor proporcional ao preço de cada venda — quem vendeu mais caro absorve mais"
                               className={newOverhead.method === "per_revenue" ? "active" : ""}
                               onClick={() => setNewOverhead((s) => ({ ...s, method: "per_revenue" }))}
                             >
-                              Por venda
-                            </button>
-                            <button
-                              type="button"
-                              title="Aplica esse valor direto em cada peça vendida, sem depender do total do mês — use quando já souber o CAC (gasto ÷ conversões)"
-                              className={newOverhead.method === "fixed_per_unit" ? "active" : ""}
-                              onClick={() => setNewOverhead((s) => ({ ...s, method: "fixed_per_unit" }))}
-                            >
-                              CAC fixo
+                              Variável
                             </button>
                           </div>
                         </td>
