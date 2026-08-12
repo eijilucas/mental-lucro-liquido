@@ -5,6 +5,7 @@ export function TopBar({ subtitle, children }: { subtitle: string; children?: Re
   return (
     <div className="topbar">
       <div className="brand">
+        <img src="/logo-m.png" alt="Mental Madness" className="brand-logo" />
         <span className="brand-mark">Mental Madness</span>
         <span className="brand-sep">/</span>
         <span className="brand-app">{subtitle}</span>

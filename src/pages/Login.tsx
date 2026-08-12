@@ -39,6 +39,7 @@ export function Login() {
   return (
     <div className="app" style={{ maxWidth: 380, paddingTop: 96 }}>
       <div className="brand" style={{ marginBottom: 28 }}>
+        <img src="/logo-m.png" alt="Mental Madness" className="brand-logo" />
         <span className="brand-mark">Mental Madness</span>
         <span className="brand-sep">/</span>
         <span className="brand-app">lucro líquido</span>
