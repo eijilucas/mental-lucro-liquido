@@ -289,7 +289,8 @@ select.cell-select:focus, input.cell-text:focus { outline: none; border-color: v
 /* ---- Tables ---- */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th, td { text-align: left; padding: 14px 20px 14px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th:last-child, td:last-child { padding-right: 0; }
 th {
   font-family: var(--font-body);
   font-size: 11px;
