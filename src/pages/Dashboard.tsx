@@ -6,12 +6,10 @@ import {
   fetchPreviousMonthDre,
   fetchRecentSales,
   fetchSkuMarginForMonth,
-  fetchMonthlyOverhead,
   fetchLastSyncTime,
   currentMonthStart,
   type MonthlyDreRow,
   type SaleMarginRow,
-  type OverheadRow,
 } from "../lib/queries";
 import { supabase } from "../lib/supabase";
 
@@ -43,8 +41,6 @@ interface DashboardData {
   prevDre: MonthlyDreRow | null;
   recentSales: SaleMarginRow[];
   skuMargin: { sku: string; units: number; marginPct: number }[];
-  overhead: OverheadRow[];
-  salesSynced: number;
   lastSync: string | null;
 }
 
@@ -56,12 +52,11 @@ export function Dashboard() {
     let cancelled = false;
     async function load() {
       try {
-        const [dre, prevDre, recentSales, skuMargin, overhead, lastSync] = await Promise.all([
+        const [dre, prevDre, recentSales, skuMargin, lastSync] = await Promise.all([
           fetchMonthlyDre(),
           fetchPreviousMonthDre(),
           fetchRecentSales(5),
           fetchSkuMarginForMonth(),
-          fetchMonthlyOverhead(),
           fetchLastSyncTime(),
         ]);
         if (cancelled) return;
@@ -69,15 +64,7 @@ export function Dashboard() {
           setError(`Ainda não há vendas sincronizadas para ${monthLabel(currentMonthStart())}.`);
           return;
         }
-        setData({
-          dre,
-          prevDre,
-          recentSales,
-          skuMargin,
-          overhead,
-          salesSynced: recentSales.length,
-          lastSync,
-        });
+        setData({ dre, prevDre, recentSales, skuMargin, lastSync });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
       }
@@ -118,7 +105,8 @@ export function Dashboard() {
     );
   }
 
-  const { dre, prevDre, recentSales, skuMargin, overhead, lastSync } = data;
+  const { dre, prevDre, recentSales, skuMargin, lastSync } = data;
+  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost;
   const afterDirect = dre.gross_revenue - dre.direct_cost;
   const afterSaleCost = afterDirect - dre.sale_cost;
   const afterMarketing = afterSaleCost - dre.marketing_cost;
@@ -133,12 +121,6 @@ export function Dashboard() {
     <div className="app">
       <TopBar subtitle="lucro líquido">
         <div className="topbar-controls">
-          <div className="seg">
-            <button className="active">{monthLabel(dre.month)}</button>
-          </div>
-          <div className="icon-btn" title="Exportar">
-            ⇩
-          </div>
           <AdminLink />
           <SignOutButton />
         </div>
@@ -146,11 +128,11 @@ export function Dashboard() {
 
       <h1 className="page-title">Visão geral — {monthLabel(dre.month)}</h1>
       <p className="page-sub">
-        {recentSales.length} vendas recentes de <b>sale_revenue</b>
+        {recentSales.length} vendas recentes
         {lastSync ? <> · última sincronização {timeAgo(lastSync)}</> : null}
       </p>
 
-      <div className="kpi-row">
+      <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
         <div className="kpi">
           <div className="kpi-label">Faturamento</div>
           <div className="kpi-value">R$ {money(dre.gross_revenue)}</div>
@@ -161,24 +143,9 @@ export function Dashboard() {
           )}
         </div>
         <div className="kpi">
-          <div className="kpi-label">Custo direto</div>
-          <div className="kpi-value">R$ {money(dre.direct_cost)}</div>
-          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((dre.direct_cost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Custos da venda</div>
-          <div className="kpi-value">R$ {money(dre.sale_cost)}</div>
-          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((dre.sale_cost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Marketing rateado</div>
-          <div className="kpi-value">R$ {money(dre.marketing_cost)}</div>
-          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((dre.marketing_cost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Fixos rateados</div>
-          <div className="kpi-value">R$ {money(dre.fixed_cost)}</div>
-          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((dre.fixed_cost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
+          <div className="kpi-label">Custos totais</div>
+          <div className="kpi-value">R$ {money(totalCost)}</div>
+          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((totalCost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
         </div>
         <div className="kpi hero">
           <div className="kpi-label">Lucro líquido</div>
@@ -187,58 +154,58 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid">
-        <div className="col">
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">DRE do mês</span>
-              <span className="panel-hint">faturamento → lucro líquido</span>
-            </div>
-            <div className="panel-body">
-              <div className="waterfall">
-                <div className="wf-row">
-                  <div className="wf-label strong">Faturamento</div>
-                  <div className="wf-track">
-                    <div className="wf-fill neutral" style={{ width: "100%" }} />
-                  </div>
-                  <div className="wf-value">R$ {moneyCents(dre.gross_revenue)}</div>
-                </div>
-                <div className="wf-cut">− R$ {moneyCents(dre.direct_cost)} · custo direto (tecido, estampa, costura...)</div>
-                <div className="wf-row">
-                  <div className="wf-label">Após custo direto</div>
-                  <div className="wf-track">
-                    <div className="wf-fill" style={{ width: waterfallWidth(afterDirect) }} />
-                  </div>
-                  <div className="wf-value">R$ {moneyCents(afterDirect)}</div>
-                </div>
-                <div className="wf-cut">− R$ {moneyCents(dre.sale_cost)} · taxa Shopify + gateway + imposto + comissão</div>
-                <div className="wf-row">
-                  <div className="wf-label">Após custos da venda</div>
-                  <div className="wf-track">
-                    <div className="wf-fill" style={{ width: waterfallWidth(afterSaleCost) }} />
-                  </div>
-                  <div className="wf-value">R$ {moneyCents(afterSaleCost)}</div>
-                </div>
-                <div className="wf-cut">− R$ {moneyCents(dre.marketing_cost)} · marketing rateado (tráfego + influenciadores)</div>
-                <div className="wf-row">
-                  <div className="wf-label">Após marketing</div>
-                  <div className="wf-track">
-                    <div className="wf-fill" style={{ width: waterfallWidth(afterMarketing) }} />
-                  </div>
-                  <div className="wf-value">R$ {moneyCents(afterMarketing)}</div>
-                </div>
-                <div className="wf-cut">− R$ {moneyCents(dre.fixed_cost)} · fixos rateados (plataforma, folha, contabilidade...)</div>
-                <div className="wf-row">
-                  <div className="wf-label strong">Lucro líquido</div>
-                  <div className="wf-track">
-                    <div className="wf-fill final" style={{ width: waterfallWidth(dre.net_profit) }} />
-                  </div>
-                  <div className="wf-value final">R$ {moneyCents(dre.net_profit)}</div>
-                </div>
+      <div className="panel">
+        <div className="panel-head">
+          <span className="panel-title">DRE do mês</span>
+          <span className="panel-hint">faturamento → lucro líquido</span>
+        </div>
+        <div className="panel-body">
+          <div className="waterfall">
+            <div className="wf-row">
+              <div className="wf-label strong">Faturamento</div>
+              <div className="wf-track">
+                <div className="wf-fill neutral" style={{ width: "100%" }} />
               </div>
+              <div className="wf-value">R$ {moneyCents(dre.gross_revenue)}</div>
+            </div>
+            <div className="wf-cut">− R$ {moneyCents(dre.direct_cost)} · custo direto</div>
+            <div className="wf-row">
+              <div className="wf-label">Após custo direto</div>
+              <div className="wf-track">
+                <div className="wf-fill" style={{ width: waterfallWidth(afterDirect) }} />
+              </div>
+              <div className="wf-value">R$ {moneyCents(afterDirect)}</div>
+            </div>
+            <div className="wf-cut">− R$ {moneyCents(dre.sale_cost)} · custos da venda</div>
+            <div className="wf-row">
+              <div className="wf-label">Após custos da venda</div>
+              <div className="wf-track">
+                <div className="wf-fill" style={{ width: waterfallWidth(afterSaleCost) }} />
+              </div>
+              <div className="wf-value">R$ {moneyCents(afterSaleCost)}</div>
+            </div>
+            <div className="wf-cut">− R$ {moneyCents(dre.marketing_cost)} · marketing rateado</div>
+            <div className="wf-row">
+              <div className="wf-label">Após marketing</div>
+              <div className="wf-track">
+                <div className="wf-fill" style={{ width: waterfallWidth(afterMarketing) }} />
+              </div>
+              <div className="wf-value">R$ {moneyCents(afterMarketing)}</div>
+            </div>
+            <div className="wf-cut">− R$ {moneyCents(dre.fixed_cost)} · fixos rateados</div>
+            <div className="wf-row">
+              <div className="wf-label strong">Lucro líquido</div>
+              <div className="wf-track">
+                <div className="wf-fill final" style={{ width: waterfallWidth(dre.net_profit) }} />
+              </div>
+              <div className="wf-value final">R$ {moneyCents(dre.net_profit)}</div>
             </div>
           </div>
+        </div>
+      </div>
 
+      <div className="grid">
+        <div className="col">
           <div className="panel">
             <div className="panel-head">
               <span className="panel-title">Vendas recentes</span>
@@ -250,9 +217,6 @@ export function Dashboard() {
                   <tr>
                     <th>SKU</th>
                     <th className="num">Bruto</th>
-                    <th className="num">Custo direto</th>
-                    <th className="num">Custos venda</th>
-                    <th className="num">Rateio</th>
                     <th className="num">Líquido</th>
                     <th className="num">Margem</th>
                   </tr>
@@ -260,7 +224,7 @@ export function Dashboard() {
                 <tbody>
                   {recentSales.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ color: "var(--ink-faint)" }}>
+                      <td colSpan={4} style={{ color: "var(--ink-faint)" }}>
                         Nenhuma venda ainda.
                       </td>
                     </tr>
@@ -274,9 +238,6 @@ export function Dashboard() {
                           <span className="sku-id">{s.product_sku}</span>
                         </td>
                         <td className="num">{moneyCents(s.gross_amount)}</td>
-                        <td className="num">{moneyCents(s.direct_cost)}</td>
-                        <td className="num">{moneyCents(s.sale_cost)}</td>
-                        <td className="num">{moneyCents(s.marketing_cost + s.fixed_cost)}</td>
                         <td className="num">{moneyCents(s.net_profit)}</td>
                         <td className="num">
                           <span className={`margin-pill ${marginClass(marginPct)}`}>{marginPct.toFixed(1)}%</span>
@@ -317,36 +278,6 @@ export function Dashboard() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Rateio do mês</span>
-              <span className="panel-hint">método por categoria</span>
-            </div>
-            <div className="panel-body">
-              <div className="rateio-list">
-                {overhead.map((row) => (
-                  <div className="rateio-item" key={row.id}>
-                    <div className="rateio-name">
-                      {row.category}
-                      <span className="rateio-sub">{row.is_marketing ? "marketing" : "fixo"}</span>
-                    </div>
-                    <span className="method-pill">
-                      {row.allocation_method === "per_revenue" ? "proporcional à venda" : "igual pra todas"}
-                    </span>
-                    <div className="rateio-amt">R$ {money(row.amount)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="sync-strip">
-              <span className="sync-dot" />
-              <span>
-                <b>Projeto A</b> {lastSync ? `sincronizado ${timeAgo(lastSync)}` : "ainda sem sincronização"}
-              </span>
-              <span className="src">read-only</span>
             </div>
           </div>
         </div>
