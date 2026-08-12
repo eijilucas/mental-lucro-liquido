@@ -87,13 +87,46 @@ uma vez, então não pode duplicar).
 cada peça" precisa ser **exatamente igual** ao SKU real da peça na
 Shopify — é assim que o sistema liga uma venda ao custo dela. SKU errado
 não dá erro, só faz o custo direto daquela venda virar zero silenciosamente
-(lucro aparente maior do que o real). O campo de SKU no admin já é
-editável pra isso — só não pode esquecer de conferir.
+(lucro aparente maior do que o real). Pra evitar digitar SKU errado, o
+próprio `shopify-webhook` já cria a linha da peça sozinho (SKU + nome
+certos, direto do payload) na primeira venda daquele SKU — o admin só
+precisa preencher os números de custo depois. As peças criadas assim
+aparecem com o selo "custo zerado" na tela até alguém preencher.
+
+## Importar o catálogo da Shopify antes de qualquer venda
+
+Código pronto em
+`supabase/functions/shopify-import-products/index.ts`. Em vez de esperar
+o `shopify-webhook` ir descobrindo peça por peça conforme elas vendem,
+essa function busca o catálogo inteiro da Shopify de uma vez (API de
+Produtos, com paginação) e cria todas as linhas de uma vez em
+`product_costs` — custo zerado, prontas pro Vitor preencher com calma
+antes do webhook começar a ligar vendas de verdade. Não sobrescreve
+custo já preenchido (`ignoreDuplicates`), então dá pra rodar de novo
+sempre que a loja tiver produto novo.
+
+Precisa das mesmas credenciais admin da Shopify do webhook, mais um
+token de API com escopo `read_products` (pode ser o mesmo app custom,
+só marcando esse escopo a mais):
+
+```
+npx supabase secrets set SHOPIFY_STORE_DOMAIN=sua-loja.myshopify.com --project-ref vatoeojxpejefxqslgli
+npx supabase secrets set SHOPIFY_ADMIN_API_TOKEN=<token, escopo read_products> --project-ref vatoeojxpejefxqslgli
+npx supabase secrets set ADMIN_IMPORT_SECRET=<qualquer string longa e aleatória> --project-ref vatoeojxpejefxqslgli
+npx supabase functions deploy shopify-import-products --project-ref vatoeojxpejefxqslgli
+```
+
+Pra disparar a importação (não é automático, chama quando quiser):
+
+```
+curl -X POST https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-import-products \
+  -H "Authorization: Bearer <ADMIN_IMPORT_SECRET>"
+```
 
 ## Próximos passos
 
-1. Ligar o webhook de verdade (ver seção acima) — depende de acesso à
-   Shopify.
+1. Ligar o webhook e importar o catálogo de verdade (ver seções acima) —
+   depende de acesso à Shopify.
 2. Tela pra gerenciar `admin_emails` (hoje só dá pra editar via SQL Editor
    ou CLI).
 3. Seletor de mês no dashboard/admin — hoje sempre mostra o mês corrente;
