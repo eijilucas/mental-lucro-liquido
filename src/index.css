@@ -287,9 +287,10 @@ select.cell-select:focus, input.cell-text:focus { outline: none; border-color: v
 .wf-cut { font-family: var(--font-body); font-size: 11px; letter-spacing: 0.02em; color: var(--negative); grid-column: 2 / 3; margin-top: -3px; padding-left: 2px; }
 
 /* ---- Tables ---- */
-/* padding vive aqui (não no panel-body) pra viajar junto com o scroll —
-   senão, no fim do scroll horizontal o conteúdo bate direto na borda. */
-.table-wrap { overflow-x: auto; margin: 0 -24px; padding: 0 24px; }
+/* table-wrap é sempre filho direto de .panel (nunca dentro de .panel-body)
+   e carrega o próprio padding — assim o respiro lateral viaja junto com o
+   scroll horizontal em vez de ficar só na borda externa, que não rola. */
+.table-wrap { overflow-x: auto; padding: 0 24px 20px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 14px 20px 14px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th:last-child, td:last-child { padding-right: 0; }

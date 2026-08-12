@@ -211,7 +211,7 @@ export function Dashboard() {
               <span className="panel-title">Vendas recentes</span>
               <span className="panel-hint">margem por venda</span>
             </div>
-            <div className="panel-body table-wrap">
+            <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -257,7 +257,7 @@ export function Dashboard() {
               <span className="panel-title">Margem por SKU</span>
               <span className="panel-hint">{monthLabel(dre.month)}</span>
             </div>
-            <div className="panel-body table-wrap">
+            <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
