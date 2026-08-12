@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 
+export type ProductLine = "basico" | "exclusivo";
+
 export interface SaleMarginRow {
   sale_id: string;
   product_sku: string;
@@ -12,6 +14,7 @@ export interface SaleMarginRow {
   fixed_cost: number;
   net_profit: number;
   sale_date: string;
+  product_line: ProductLine;
 }
 
 export interface MonthlyDreRow {
@@ -51,6 +54,7 @@ export interface ProductCostRow {
   sacolinha: number;
   adesivo: number;
   outros_acabamentos: number;
+  product_line: ProductLine;
 }
 
 export function currentMonthStart(): string {
@@ -90,11 +94,28 @@ export async function fetchRecentSales(limit = 5) {
   return data ?? [];
 }
 
-export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
+function monthRange(month: string) {
   const start = month;
   const [y, m] = month.split("-").map(Number);
   const nextMonth = new Date(y, m, 1);
   const end = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
+  return { start, end };
+}
+
+export async function fetchSaleMarginForMonth(month = currentMonthStart()) {
+  const { start, end } = monthRange(month);
+  const { data, error } = await db()
+    .from("sale_margin")
+    .select("*")
+    .gte("sale_date", start)
+    .lt("sale_date", end)
+    .returns<SaleMarginRow[]>();
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
+  const { start, end } = monthRange(month);
 
   const { data, error } = await db()
     .from("sale_margin")
@@ -184,17 +205,29 @@ export async function updateFeeRates(rates: Omit<FeeRatesRow, "id">) {
 export async function fetchProductCosts() {
   const { data, error } = await db()
     .from("product_costs")
-    .select("sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos")
+    .select("sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line")
     .order("product_name")
     .returns<ProductCostRow[]>();
   if (error) throw error;
   return data ?? [];
 }
 
-export async function updateProductCost(sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name">, value: number) {
+export async function updateProductCost(
+  sku: string,
+  field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">,
+  value: number,
+) {
   const { error } = await db()
     .from("product_costs")
     .update({ [field]: value, updated_at: new Date().toISOString() })
+    .eq("sku", sku);
+  if (error) throw error;
+}
+
+export async function updateProductLine(sku: string, product_line: ProductLine) {
+  const { error } = await db()
+    .from("product_costs")
+    .update({ product_line, updated_at: new Date().toISOString() })
     .eq("sku", sku);
   if (error) throw error;
 }

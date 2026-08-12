@@ -14,6 +14,7 @@ import {
   updateProductCost,
   updateProductName,
   updateProductSku,
+  updateProductLine,
   deleteProductCost,
   insertProductCost,
   currentMonthStart,
@@ -65,6 +66,7 @@ const emptyProductCost: ProductCostRow = {
   sacolinha: 0,
   adesivo: 0,
   outros_acabamentos: 0,
+  product_line: "basico",
 };
 
 export function Admin() {
@@ -146,7 +148,7 @@ export function Admin() {
     setTimeout(() => setFeeSaved(false), 2500);
   }
 
-  async function handleProductCostBlur(sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name">, value: string) {
+  async function handleProductCostBlur(sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">, value: string) {
     const parsed = parseMoney(value);
     if (parsed === null) return;
     setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, [field]: parsed } : r)));
@@ -176,6 +178,11 @@ export function Admin() {
     }
     setProductCosts((rows) => rows.map((r) => (r.sku === oldSku ? { ...r, sku: trimmed } : r)));
     await updateProductSku(oldSku, trimmed);
+  }
+
+  async function handleLineChange(sku: string, line: ProductCostRow["product_line"]) {
+    setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, product_line: line } : r)));
+    await updateProductLine(sku, line);
   }
 
   async function handleDeleteProduct(sku: string) {
@@ -508,6 +515,7 @@ export function Admin() {
                   <thead>
                     <tr>
                       <th>Peça</th>
+                      <th style={{ width: 150 }}>Linha</th>
                       <th className="num">Tecido</th>
                       <th className="num">Estampa</th>
                       <th className="num">Costura</th>
@@ -543,6 +551,24 @@ export function Admin() {
                               </span>
                             )}
                           </td>
+                          <td>
+                            <div className="method-toggle">
+                              <button
+                                type="button"
+                                className={p.product_line === "basico" ? "active" : ""}
+                                onClick={() => handleLineChange(p.sku, "basico")}
+                              >
+                                Básico
+                              </button>
+                              <button
+                                type="button"
+                                className={p.product_line === "exclusivo" ? "active" : ""}
+                                onClick={() => handleLineChange(p.sku, "exclusivo")}
+                              >
+                                Exclusivo
+                              </button>
+                            </div>
+                          </td>
                           <td className="num">
                             <input className="cell-input" defaultValue={money(p.tecido)} onBlur={(e) => handleProductCostBlur(p.sku, "tecido", e.target.value)} />
                           </td>
@@ -577,6 +603,24 @@ export function Admin() {
                           value={newProduct.product_name}
                           onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
                         />
+                      </td>
+                      <td>
+                        <div className="method-toggle">
+                          <button
+                            type="button"
+                            className={newProduct.product_line === "basico" ? "active" : ""}
+                            onClick={() => setNewProduct((s) => ({ ...s, product_line: "basico" }))}
+                          >
+                            Básico
+                          </button>
+                          <button
+                            type="button"
+                            className={newProduct.product_line === "exclusivo" ? "active" : ""}
+                            onClick={() => setNewProduct((s) => ({ ...s, product_line: "exclusivo" }))}
+                          >
+                            Exclusivo
+                          </button>
+                        </div>
                       </td>
                       {(["tecido", "estampa", "costura", "sacolinha", "adesivo", "outros_acabamentos"] as const).map((field) => (
                         <td className="num" key={field}>

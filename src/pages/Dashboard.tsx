@@ -6,6 +6,7 @@ import {
   fetchPreviousMonthDre,
   fetchRecentSales,
   fetchSkuMarginForMonth,
+  fetchSaleMarginForMonth,
   fetchLastSyncTime,
   currentMonthStart,
   type MonthlyDreRow,
@@ -36,130 +37,41 @@ function timeAgo(iso: string) {
   return `há ${hours}h`;
 }
 
-interface DashboardData {
-  dre: MonthlyDreRow;
-  prevDre: MonthlyDreRow | null;
-  recentSales: SaleMarginRow[];
-  skuMargin: { sku: string; units: number; marginPct: number }[];
-  lastSync: string | null;
+type DreTotals = Omit<MonthlyDreRow, "month">;
+
+function aggregateDre(rows: SaleMarginRow[]): DreTotals {
+  return rows.reduce<DreTotals>(
+    (acc, r) => ({
+      gross_revenue: acc.gross_revenue + r.gross_amount,
+      direct_cost: acc.direct_cost + r.direct_cost,
+      sale_cost: acc.sale_cost + r.sale_cost,
+      marketing_cost: acc.marketing_cost + r.marketing_cost,
+      fixed_cost: acc.fixed_cost + r.fixed_cost,
+      net_profit: acc.net_profit + r.net_profit,
+    }),
+    { gross_revenue: 0, direct_cost: 0, sale_cost: 0, marketing_cost: 0, fixed_cost: 0, net_profit: 0 },
+  );
 }
 
-export function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [dre, prevDre, recentSales, skuMargin, lastSync] = await Promise.all([
-          fetchMonthlyDre(),
-          fetchPreviousMonthDre(),
-          fetchRecentSales(5),
-          fetchSkuMarginForMonth(),
-          fetchLastSyncTime(),
-        ]);
-        if (cancelled) return;
-        if (!dre) {
-          setError(`Ainda não há vendas sincronizadas para ${monthLabel(currentMonthStart())}.`);
-          return;
-        }
-        setData({ dre, prevDre, recentSales, skuMargin, lastSync });
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!supabase) {
-    return (
-      <div className="app">
-        <p className="page-sub">Supabase não configurado — faltam as variáveis de ambiente (.env).</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="app">
-        <TopBar subtitle="lucro líquido">
-          <div className="topbar-controls">
-            <AdminLink />
-            <SignOutButton />
-          </div>
-        </TopBar>
-        <p className="page-sub">{error}</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="app">
-        <p className="page-sub">Carregando...</p>
-      </div>
-    );
-  }
-
-  const { dre, prevDre, recentSales, skuMargin, lastSync } = data;
-  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost;
+function DreWaterfall({ title, hint, dre }: { title: string; hint: string; dre: DreTotals }) {
   const afterDirect = dre.gross_revenue - dre.direct_cost;
   const afterSaleCost = afterDirect - dre.sale_cost;
   const afterMarketing = afterSaleCost - dre.marketing_cost;
-  const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
-  const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
 
   function waterfallWidth(value: number) {
     return `${dre.gross_revenue > 0 ? ((value / dre.gross_revenue) * 100).toFixed(1) : 0}%`;
   }
 
   return (
-    <div className="app">
-      <TopBar subtitle="lucro líquido">
-        <div className="topbar-controls">
-          <AdminLink />
-          <SignOutButton />
-        </div>
-      </TopBar>
-
-      <h1 className="page-title">Visão geral — {monthLabel(dre.month)}</h1>
-      <p className="page-sub">
-        {recentSales.length} vendas recentes
-        {lastSync ? <> · última sincronização {timeAgo(lastSync)}</> : null}
-      </p>
-
-      <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        <div className="kpi">
-          <div className="kpi-label">Faturamento</div>
-          <div className="kpi-value">R$ {money(dre.gross_revenue)}</div>
-          {grossDeltaPct !== null && (
-            <div className={`kpi-delta ${grossDeltaPct >= 0 ? "up" : "down"}`}>
-              {grossDeltaPct >= 0 ? "↑" : "↓"} {Math.abs(grossDeltaPct).toFixed(1)}% vs mês anterior
-            </div>
-          )}
-        </div>
-        <div className="kpi">
-          <div className="kpi-label">Custos totais</div>
-          <div className="kpi-value">R$ {money(totalCost)}</div>
-          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((totalCost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
-        </div>
-        <div className="kpi hero">
-          <div className="kpi-label">Lucro líquido</div>
-          <div className="kpi-value">R$ {money(dre.net_profit)}</div>
-          <div className="kpi-delta up">margem {netMarginPct.toFixed(1)}%</div>
-        </div>
+    <div className="panel">
+      <div className="panel-head">
+        <span className="panel-title">{title}</span>
+        <span className="panel-hint">{hint}</span>
       </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">DRE do mês</span>
-          <span className="panel-hint">faturamento → lucro líquido</span>
-        </div>
-        <div className="panel-body">
+      <div className="panel-body">
+        {dre.gross_revenue === 0 ? (
+          <p className="page-sub" style={{ margin: 0 }}>Nenhuma venda dessa linha no mês.</p>
+        ) : (
           <div className="waterfall">
             <div className="wf-row">
               <div className="wf-label strong">Faturamento</div>
@@ -201,8 +113,131 @@ export function Dashboard() {
               <div className="wf-value final">R$ {moneyCents(dre.net_profit)}</div>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface DashboardData {
+  dre: MonthlyDreRow;
+  prevDre: MonthlyDreRow | null;
+  recentSales: SaleMarginRow[];
+  skuMargin: { sku: string; units: number; marginPct: number }[];
+  basicoDre: DreTotals;
+  exclusivoDre: DreTotals;
+  lastSync: string | null;
+}
+
+export function Dashboard() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [dre, prevDre, recentSales, skuMargin, saleMarginRows, lastSync] = await Promise.all([
+          fetchMonthlyDre(),
+          fetchPreviousMonthDre(),
+          fetchRecentSales(5),
+          fetchSkuMarginForMonth(),
+          fetchSaleMarginForMonth(),
+          fetchLastSyncTime(),
+        ]);
+        if (cancelled) return;
+        if (!dre) {
+          setError(`Ainda não há vendas sincronizadas para ${monthLabel(currentMonthStart())}.`);
+          return;
+        }
+        const basicoDre = aggregateDre(saleMarginRows.filter((r) => r.product_line === "basico"));
+        const exclusivoDre = aggregateDre(saleMarginRows.filter((r) => r.product_line === "exclusivo"));
+        setData({ dre, prevDre, recentSales, skuMargin, basicoDre, exclusivoDre, lastSync });
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!supabase) {
+    return (
+      <div className="app">
+        <p className="page-sub">Supabase não configurado — faltam as variáveis de ambiente (.env).</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="app">
+        <TopBar subtitle="lucro líquido">
+          <div className="topbar-controls">
+            <AdminLink />
+            <SignOutButton />
+          </div>
+        </TopBar>
+        <p className="page-sub">{error}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="app">
+        <p className="page-sub">Carregando...</p>
+      </div>
+    );
+  }
+
+  const { dre, prevDre, recentSales, skuMargin, basicoDre, exclusivoDre, lastSync } = data;
+  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost;
+  const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
+  const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
+
+  return (
+    <div className="app">
+      <TopBar subtitle="lucro líquido">
+        <div className="topbar-controls">
+          <AdminLink />
+          <SignOutButton />
+        </div>
+      </TopBar>
+
+      <h1 className="page-title">Visão geral — {monthLabel(dre.month)}</h1>
+      <p className="page-sub">
+        {recentSales.length} vendas recentes
+        {lastSync ? <> · última sincronização {timeAgo(lastSync)}</> : null}
+      </p>
+
+      <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <div className="kpi">
+          <div className="kpi-label">Faturamento</div>
+          <div className="kpi-value">R$ {money(dre.gross_revenue)}</div>
+          {grossDeltaPct !== null && (
+            <div className={`kpi-delta ${grossDeltaPct >= 0 ? "up" : "down"}`}>
+              {grossDeltaPct >= 0 ? "↑" : "↓"} {Math.abs(grossDeltaPct).toFixed(1)}% vs mês anterior
+            </div>
+          )}
+        </div>
+        <div className="kpi">
+          <div className="kpi-label">Custos totais</div>
+          <div className="kpi-value">R$ {money(totalCost)}</div>
+          <div className="kpi-delta down">{dre.gross_revenue > 0 ? ((totalCost / dre.gross_revenue) * 100).toFixed(1) : 0}% do fat.</div>
+        </div>
+        <div className="kpi hero">
+          <div className="kpi-label">Lucro líquido</div>
+          <div className="kpi-value">R$ {money(dre.net_profit)}</div>
+          <div className="kpi-delta up">margem {netMarginPct.toFixed(1)}%</div>
         </div>
       </div>
+
+      <DreWaterfall title="DRE do mês — Total" hint="faturamento → lucro líquido · drop básico + exclusivos" dre={dre} />
+      <DreWaterfall title="DRE do mês — Drop Básico" hint="só as peças marcadas como linha básica" dre={basicoDre} />
+      <DreWaterfall title="DRE do mês — Exclusivos" hint="só as peças marcadas como linha exclusiva" dre={exclusivoDre} />
 
       <div className="grid">
         <div className="col">
