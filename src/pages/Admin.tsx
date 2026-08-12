@@ -271,14 +271,22 @@ export function Admin() {
                       ))}
                       <tr>
                         <td>
-                          <select
-                            className="cell-select"
-                            value={newOverhead.isMarketing ? "marketing" : "fixo"}
-                            onChange={(e) => setNewOverhead((s) => ({ ...s, isMarketing: e.target.value === "marketing" }))}
-                          >
-                            <option value="fixo">fixo</option>
-                            <option value="marketing">marketing</option>
-                          </select>
+                          <div className="method-toggle">
+                            <button
+                              type="button"
+                              className={!newOverhead.isMarketing ? "active" : ""}
+                              onClick={() => setNewOverhead((s) => ({ ...s, isMarketing: false }))}
+                            >
+                              Fixo
+                            </button>
+                            <button
+                              type="button"
+                              className={newOverhead.isMarketing ? "active" : ""}
+                              onClick={() => setNewOverhead((s) => ({ ...s, isMarketing: true }))}
+                            >
+                              Marketing
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <input

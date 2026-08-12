@@ -212,7 +212,7 @@ h1.page-title {
 .cell-input:focus { outline: none; border-color: var(--accent); }
 .total-cell { font-family: var(--font-display); font-weight: 700; color: var(--accent); }
 
-select.cell-select, input.cell-text {
+input.cell-text {
   font: inherit;
   font-family: var(--font-body);
   font-size: 12px;
@@ -222,7 +222,7 @@ select.cell-select, input.cell-text {
   color: var(--ink);
   padding: 6px 8px;
 }
-select.cell-select:focus, input.cell-text:focus { outline: none; border-color: var(--accent); }
+input.cell-text:focus { outline: none; border-color: var(--accent); }
 
 .icon-cell {
   width: 28px;
