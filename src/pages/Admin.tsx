@@ -13,6 +13,7 @@ import {
   fetchProductCosts,
   updateProductCost,
   updateProductName,
+  updateProductSku,
   deleteProductCost,
   insertProductCost,
   currentMonthStart,
@@ -153,6 +154,17 @@ export function Admin() {
     if (!trimmed) return;
     setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, product_name: trimmed } : r)));
     await updateProductName(sku, trimmed);
+  }
+
+  async function handleSkuBlur(oldSku: string, value: string) {
+    const trimmed = value.trim().toUpperCase();
+    if (!trimmed || trimmed === oldSku) return;
+    if (productCosts.some((r) => r.sku === trimmed)) {
+      alert(`Já existe uma peça com o SKU ${trimmed}.`);
+      return;
+    }
+    setProductCosts((rows) => rows.map((r) => (r.sku === oldSku ? { ...r, sku: trimmed } : r)));
+    await updateProductSku(oldSku, trimmed);
   }
 
   async function handleDeleteProduct(sku: string) {
@@ -504,7 +516,13 @@ export function Admin() {
                               onBlur={(e) => handleProductNameBlur(p.sku, e.target.value)}
                               style={{ width: 160, display: "block", marginBottom: 4 }}
                             />
-                            <span className="sku-id">{p.sku}</span>
+                            <input
+                              className="cell-text sku-id-input"
+                              defaultValue={p.sku}
+                              title="SKU — precisa ser exatamente igual ao SKU real cadastrado na Shopify, senão a venda não casa com esse custo"
+                              onBlur={(e) => handleSkuBlur(p.sku, e.target.value)}
+                              style={{ width: 160, display: "block" }}
+                            />
                           </td>
                           <td className="num">
                             <input className="cell-input" defaultValue={money(p.tecido)} onBlur={(e) => handleProductCostBlur(p.sku, "tecido", e.target.value)} />

@@ -1,9 +1,17 @@
 # Lucro Líquido — Mental Madness
 
-Projeto B da proposta de arquitetura: calcula a margem real de cada venda
-(faturamento → custo direto → custos da venda → marketing rateado → fixos
-rateados → lucro líquido), sem tocar no projeto de comissionamento
-(Projeto A). Ver `lucro-liquido-arquitetura.html` para a proposta original.
+Calcula a margem real de cada venda (faturamento → custo direto → custos da
+venda → marketing rateado → fixos rateados → lucro líquido).
+
+Mudança em relação à proposta original: em vez de sincronizar vendas a
+partir do Projeto A (painel de comissionamento), esse projeto recebe as
+vendas direto de um webhook da própria Shopify. Motivo: o Projeto A só
+enxerga venda com cupom de afiliado, e o lucro líquido precisa de
+**todas** as vendas — com ou sem cupom. De brinde, o payload da Shopify já
+vem com SKU e preço por item, então não precisa mexer no schema do
+Projeto A pra resolver isso. Ver `lucro-liquido-arquitetura.html` pra
+proposta original (o desenho de custo em 4 camadas continua igual, só a
+origem do dado de venda mudou).
 
 Stack: Vite + React 19 + TypeScript + react-router-dom + @supabase/supabase-js
 — mesma stack do `mental-madness-mvp`, pra ficar familiar.
@@ -49,17 +57,49 @@ npm run dev
 Copiar `.env.example` pra `.env` e preencher com a URL e a anon key do
 projeto (já feito neste ambiente).
 
+## Webhook da Shopify — o que falta pra ligar de verdade
+
+Código pronto em `supabase/functions/shopify-webhook/index.ts`. Recebe
+`orders/paid`, `orders/cancelled` e `refunds/create` e mantém
+`sale_revenue` atualizada (upsert idempotente por `shopify_order_id` +
+`shopify_line_item_id` — a Shopify pode reenviar o mesmo webhook mais de
+uma vez, então não pode duplicar).
+
+**Pra ativar, falta só:**
+
+1. Alguém com acesso admin da loja Shopify precisa criar um app
+   custom/private com escopo de leitura de pedidos, pra gerar um webhook
+   secret.
+2. Configurar o secret no projeto:
+   ```
+   npx supabase secrets set SHOPIFY_WEBHOOK_SECRET=<secret> --project-ref vatoeojxpejefxqslgli
+   ```
+3. Fazer o deploy da function:
+   ```
+   npx supabase functions deploy shopify-webhook --project-ref vatoeojxpejefxqslgli
+   ```
+   Isso devolve uma URL (algo como
+   `https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`).
+4. Na Shopify, registrar **três** webhooks apontando pra essa mesma URL,
+   um pra cada tópico: `orders/paid`, `orders/cancelled`, `refunds/create`.
+
+**Coisa importante pra funcionar direito**: o SKU cadastrado em "Custo de
+cada peça" precisa ser **exatamente igual** ao SKU real da peça na
+Shopify — é assim que o sistema liga uma venda ao custo dela. SKU errado
+não dá erro, só faz o custo direto daquela venda virar zero silenciosamente
+(lucro aparente maior do que o real). O campo de SKU no admin já é
+editável pra isso — só não pode esquecer de conferir.
+
 ## Próximos passos
 
-1. Escrever a function agendada que sincroniza `sale_revenue` a partir de
-   `sales` / `sale_items` do Projeto A, 1×/hora, somente leitura.
-2. **Pendência de dado**: `sale_items` no Projeto A hoje só tem
-   `product_name` e `quantity` — não tem SKU nem valor por item. Para
-   `sale_revenue` funcionar por SKU (como o schema espera), ou o Projeto A
-   passa a gravar SKU + valor por item, ou a sincronização distribui o
-   `gross_amount` da venda entre os itens por alguma regra a combinar.
-3. Tela pra gerenciar `admin_emails` (hoje só dá pra editar via SQL Editor
+1. Ligar o webhook de verdade (ver seção acima) — depende de acesso à
+   Shopify.
+2. Tela pra gerenciar `admin_emails` (hoje só dá pra editar via SQL Editor
    ou CLI).
-4. Seletor de mês no dashboard/admin — hoje sempre mostra o mês corrente;
+3. Seletor de mês no dashboard/admin — hoje sempre mostra o mês corrente;
    os botões "7d" / "Trimestre" e as setas do `month-picker` ainda são só
    visuais.
+4. Reembolso parcial de item com desconto aplicado pode não bater 100%
+   com o valor original (a function usa o preço do item no refund, não
+   recalcula rateio de desconto por item) — ok pro volume normal, vale
+   revisar se começar a ter muito reembolso parcial complexo.

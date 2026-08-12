@@ -25,9 +25,9 @@ insert into monthly_overhead (month, category, amount, is_marketing, allocation_
   ('2026-08-01', 'Contabilidade', 210.00, false, 'per_unit'),
   ('2026-08-01', 'Internet, celular, energia', 100.00, false, 'per_unit');
 
-insert into sale_revenue (sale_id, product_sku, product_name, quantity, gross_amount, sale_date) values
-  (gen_random_uuid(), 'CCP-MOL-BLK-M', 'Calça Cargo Premium Moletom', 1, 259.99, '2026-08-09 14:20:00-03'),
-  (gen_random_uuid(), 'MOL-OVS-GRF-G', 'Moletom Oversized Grafite', 1, 219.90, '2026-08-08 10:05:00-03'),
-  (gen_random_uuid(), 'CAM-BAS-OFF-P', 'Camiseta Basic Off-White', 1, 89.90, '2026-08-08 09:40:00-03'),
-  (gen_random_uuid(), 'JAQ-RIP-BLK-M', 'Jaqueta Corta-Vento Ripstop', 1, 349.90, '2026-08-07 19:15:00-03'),
-  (gen_random_uuid(), 'BON-LOG-BLK-U', 'Boné Bordado Logo', 1, 99.90, '2026-08-06 16:50:00-03');
+insert into sale_revenue (shopify_order_id, shopify_line_item_id, product_sku, product_name, quantity, gross_amount, sale_date) values
+  (5001001, 6001001, 'CCP-MOL-BLK-M', 'Calça Cargo Premium Moletom', 1, 259.99, '2026-08-09 14:20:00-03'),
+  (5001002, 6001002, 'MOL-OVS-GRF-G', 'Moletom Oversized Grafite', 1, 219.90, '2026-08-08 10:05:00-03'),
+  (5001003, 6001003, 'CAM-BAS-OFF-P', 'Camiseta Basic Off-White', 1, 89.90, '2026-08-08 09:40:00-03'),
+  (5001004, 6001004, 'JAQ-RIP-BLK-M', 'Jaqueta Corta-Vento Ripstop', 1, 349.90, '2026-08-07 19:15:00-03')
+on conflict (shopify_order_id, shopify_line_item_id) do nothing;

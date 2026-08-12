@@ -207,6 +207,14 @@ export async function updateProductName(sku: string, product_name: string) {
   if (error) throw error;
 }
 
+export async function updateProductSku(sku: string, newSku: string) {
+  const { error } = await db()
+    .from("product_costs")
+    .update({ sku: newSku, updated_at: new Date().toISOString() })
+    .eq("sku", sku);
+  if (error) throw error;
+}
+
 export async function deleteProductCost(sku: string) {
   const { error } = await db().from("product_costs").delete().eq("sku", sku);
   if (error) throw error;
