@@ -199,6 +199,19 @@ export async function updateProductCost(sku: string, field: keyof Omit<ProductCo
   if (error) throw error;
 }
 
+export async function updateProductName(sku: string, product_name: string) {
+  const { error } = await db()
+    .from("product_costs")
+    .update({ product_name, updated_at: new Date().toISOString() })
+    .eq("sku", sku);
+  if (error) throw error;
+}
+
+export async function deleteProductCost(sku: string) {
+  const { error } = await db().from("product_costs").delete().eq("sku", sku);
+  if (error) throw error;
+}
+
 export async function insertProductCost(row: ProductCostRow) {
   const { data, error } = await db().from("product_costs").insert(row).select().single<ProductCostRow>();
   if (error) throw error;

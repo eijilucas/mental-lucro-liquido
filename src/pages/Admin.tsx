@@ -12,6 +12,8 @@ import {
   updateFeeRates,
   fetchProductCosts,
   updateProductCost,
+  updateProductName,
+  deleteProductCost,
   insertProductCost,
   currentMonthStart,
   type OverheadRow,
@@ -130,6 +132,18 @@ export function Admin() {
     setNewProduct(emptyProductCost);
   }
 
+  async function handleProductNameBlur(sku: string, value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, product_name: trimmed } : r)));
+    await updateProductName(sku, trimmed);
+  }
+
+  async function handleDeleteProduct(sku: string) {
+    setProductCosts((rows) => rows.filter((r) => r.sku !== sku));
+    await deleteProductCost(sku);
+  }
+
   const marketingPool = overhead.filter((r) => r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
   const fixedPool = overhead.filter((r) => !r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
 
@@ -151,9 +165,6 @@ export function Admin() {
       </TopBar>
 
       <h1 className="page-title">Custos e taxas</h1>
-      <p className="page-sub">
-        Só o admin vê essa página — esses números não aparecem para os afiliados.
-      </p>
 
       {error && <p className="page-sub" style={{ color: "var(--negative)" }}>{error}</p>}
       {loading && <p className="page-sub">Carregando...</p>}
@@ -359,6 +370,7 @@ export function Admin() {
                       <th className="num">Adesivo</th>
                       <th className="num">Outros</th>
                       <th className="num">Total</th>
+                      <th style={{ width: 40 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -367,7 +379,12 @@ export function Admin() {
                       return (
                         <tr key={p.sku}>
                           <td className="sku">
-                            {p.product_name}
+                            <input
+                              className="cell-text"
+                              defaultValue={p.product_name}
+                              onBlur={(e) => handleProductNameBlur(p.sku, e.target.value)}
+                              style={{ width: 160, display: "block", marginBottom: 4 }}
+                            />
                             <span className="sku-id">{p.sku}</span>
                           </td>
                           <td className="num">
@@ -389,6 +406,9 @@ export function Admin() {
                             <input className="cell-input" defaultValue={money(p.outros_acabamentos)} onBlur={(e) => handleProductCostBlur(p.sku, "outros_acabamentos", e.target.value)} />
                           </td>
                           <td className="num total-cell">{money(total)}</td>
+                          <td>
+                            <div className="icon-cell" onClick={() => handleDeleteProduct(p.sku)}>✕</div>
+                          </td>
                         </tr>
                       );
                     })}
@@ -421,7 +441,10 @@ export function Admin() {
                           />
                         </td>
                       ))}
-                      <td className="num">
+                      <td className="num total-cell">
+                        {money(newProduct.tecido + newProduct.estampa + newProduct.costura + newProduct.sacolinha + newProduct.adesivo + newProduct.outros_acabamentos)}
+                      </td>
+                      <td>
                         <div className="icon-cell" onClick={handleAddProduct}>+</div>
                       </td>
                     </tr>
