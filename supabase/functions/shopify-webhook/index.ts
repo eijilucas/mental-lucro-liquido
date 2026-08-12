@@ -86,6 +86,33 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder) {
     .from("sale_revenue")
     .upsert(rows, { onConflict: "shopify_order_id,shopify_line_item_id" });
   if (error) throw error;
+
+  await ensureProductCostStubs(supabase, rows);
+}
+
+// Cria a linha da peça em `product_costs` na primeira venda que aparecer
+// com aquele SKU — custo tudo zerado, só o SKU e o nome certos (vieram
+// direto da Shopify, então batem por definição). O admin só precisa
+// preencher os números depois, nunca digita SKU na mão — elimina o erro
+// de digitação que faz o custo direto de uma venda virar zero sem avisar.
+async function ensureProductCostStubs(
+  supabase: SupabaseClient,
+  saleRows: { product_sku: string; product_name: string }[],
+) {
+  const uniqueBySku = new Map(saleRows.map((r) => [r.product_sku, r.product_name]));
+  const stubs = Array.from(uniqueBySku, ([sku, product_name]) => ({
+    sku,
+    product_name,
+    tecido: 0,
+    estampa: 0,
+    costura: 0,
+    sacolinha: 0,
+    adesivo: 0,
+    outros_acabamentos: 0,
+  }));
+
+  const { error } = await supabase.from("product_costs").upsert(stubs, { onConflict: "sku", ignoreDuplicates: true });
+  if (error) throw error;
 }
 
 async function handleOrderCancelled(supabase: SupabaseClient, order: { id: number }) {

@@ -523,6 +523,11 @@ export function Admin() {
                               onBlur={(e) => handleSkuBlur(p.sku, e.target.value)}
                               style={{ width: 160, display: "block" }}
                             />
+                            {total === 0 && (
+                              <span className="margin-pill low" style={{ marginTop: 6 }} title="Peça criada automaticamente pela primeira venda — falta preencher o custo">
+                                custo zerado
+                              </span>
+                            )}
                           </td>
                           <td className="num">
                             <input className="cell-input" defaultValue={money(p.tecido)} onBlur={(e) => handleProductCostBlur(p.sku, "tecido", e.target.value)} />
