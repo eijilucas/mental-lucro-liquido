@@ -30,7 +30,7 @@ export interface OverheadRow {
   category: string;
   amount: number;
   is_marketing: boolean;
-  allocation_method: "per_unit" | "per_revenue";
+  allocation_method: "per_unit" | "per_revenue" | "fixed_per_unit";
 }
 
 export interface FeeRatesRow {
