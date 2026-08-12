@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { TopBar, AdminBackLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
 import { supabase } from "../lib/supabase";
@@ -57,17 +57,148 @@ function monthLabel(monthStr: string) {
   return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 }
 
-const emptyProductCost: ProductCostRow = {
-  sku: "",
-  product_name: "",
-  tecido: 0,
-  estampa: 0,
-  costura: 0,
-  sacolinha: 0,
-  adesivo: 0,
-  outros_acabamentos: 0,
-  product_line: "basico",
-};
+function emptyProductCost(product_line: ProductCostRow["product_line"]): ProductCostRow {
+  return {
+    sku: "",
+    product_name: "",
+    tecido: 0,
+    estampa: 0,
+    costura: 0,
+    sacolinha: 0,
+    adesivo: 0,
+    outros_acabamentos: 0,
+    product_line,
+  };
+}
+
+function ProductLinePanel({
+  title,
+  products,
+  newProduct,
+  setNewProduct,
+  onCostBlur,
+  onNameBlur,
+  onSkuBlur,
+  onMove,
+  onDelete,
+  onAdd,
+  moveLabel,
+}: {
+  title: string;
+  products: ProductCostRow[];
+  newProduct: ProductCostRow;
+  setNewProduct: Dispatch<SetStateAction<ProductCostRow>>;
+  onCostBlur: (sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">, value: string) => void;
+  onNameBlur: (sku: string, value: string) => void;
+  onSkuBlur: (sku: string, value: string) => void;
+  onMove: (sku: string) => void;
+  onDelete: (sku: string) => void;
+  onAdd: () => void;
+  moveLabel: string;
+}) {
+  const costFields = ["tecido", "estampa", "costura", "sacolinha", "adesivo", "outros_acabamentos"] as const;
+  const newTotal = costFields.reduce((sum, f) => sum + newProduct[f], 0);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title">{title}</div>
+          <div className="panel-hint">A soma das colunas é o quanto custa produzir a peça — é isso que sai da venda antes de qualquer outra coisa.</div>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Peça</th>
+              <th className="num">Tecido</th>
+              <th className="num">Estampa</th>
+              <th className="num">Costura</th>
+              <th className="num">Sacolinha</th>
+              <th className="num">Adesivo</th>
+              <th className="num">Outros</th>
+              <th className="num">Total</th>
+              <th style={{ width: 70 }}></th>
+              <th style={{ width: 40 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => {
+              const total = p.tecido + p.estampa + p.costura + p.sacolinha + p.adesivo + p.outros_acabamentos;
+              return (
+                <tr key={p.sku}>
+                  <td className="sku">
+                    <input
+                      className="cell-text"
+                      defaultValue={p.product_name}
+                      onBlur={(e) => onNameBlur(p.sku, e.target.value)}
+                      style={{ width: 160, display: "block", marginBottom: 4 }}
+                    />
+                    <input
+                      className="cell-text sku-id-input"
+                      defaultValue={p.sku}
+                      title="SKU — precisa ser exatamente igual ao SKU real cadastrado na Shopify, senão a venda não casa com esse custo"
+                      onBlur={(e) => onSkuBlur(p.sku, e.target.value)}
+                      style={{ width: 160, display: "block" }}
+                    />
+                    {total === 0 && (
+                      <span className="margin-pill low" style={{ marginTop: 6 }} title="Peça criada automaticamente pela primeira venda — falta preencher o custo">
+                        custo zerado
+                      </span>
+                    )}
+                  </td>
+                  {costFields.map((field) => (
+                    <td className="num" key={field}>
+                      <input className="cell-input" defaultValue={money(p[field])} onBlur={(e) => onCostBlur(p.sku, field, e.target.value)} />
+                    </td>
+                  ))}
+                  <td className="num total-cell">{money(total)}</td>
+                  <td>
+                    <button type="button" className="btn btn-ghost" style={{ padding: "5px 8px", fontSize: 10 }} onClick={() => onMove(p.sku)}>
+                      {moveLabel}
+                    </button>
+                  </td>
+                  <td>
+                    <div className="icon-cell" onClick={() => onDelete(p.sku)}>✕</div>
+                  </td>
+                </tr>
+              );
+            })}
+            <tr>
+              <td className="sku">
+                <input
+                  className="cell-text"
+                  placeholder="nome da peça"
+                  style={{ width: 180 }}
+                  value={newProduct.product_name}
+                  onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
+                />
+              </td>
+              {costFields.map((field) => (
+                <td className="num" key={field}>
+                  <input
+                    className="cell-input"
+                    value={money(newProduct[field])}
+                    onChange={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setNewProduct((s) => ({ ...s, [field]: v }));
+                    }}
+                  />
+                </td>
+              ))}
+              <td className="num total-cell">{money(newTotal)}</td>
+              <td></td>
+              <td>
+                <div className="icon-cell" onClick={onAdd}>+</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("overhead");
@@ -76,7 +207,8 @@ export function Admin() {
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
-  const [newProduct, setNewProduct] = useState<ProductCostRow>(emptyProductCost);
+  const [newProductBasico, setNewProductBasico] = useState<ProductCostRow>(() => emptyProductCost("basico"));
+  const [newProductExclusivo, setNewProductExclusivo] = useState<ProductCostRow>(() => emptyProductCost("exclusivo"));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [feeSaved, setFeeSaved] = useState(false);
@@ -155,11 +287,11 @@ export function Admin() {
     await updateProductCost(sku, field, parsed);
   }
 
-  async function handleAddProduct() {
-    if (!newProduct.product_name.trim()) return;
-    const row = await insertProductCost({ ...newProduct, sku: skuFromName(newProduct.product_name) });
+  async function handleAddProduct(draft: ProductCostRow, reset: () => void) {
+    if (!draft.product_name.trim()) return;
+    const row = await insertProductCost({ ...draft, sku: skuFromName(draft.product_name) });
     setProductCosts((rows) => [...rows, row]);
-    setNewProduct(emptyProductCost);
+    reset();
   }
 
   async function handleProductNameBlur(sku: string, value: string) {
@@ -503,148 +635,34 @@ export function Admin() {
           )}
 
           {tab === "sku" && (
-            <div className="panel">
-              <div className="panel-head">
-                <div>
-                  <div className="panel-title">Custo de cada peça</div>
-                  <div className="panel-hint">A soma das colunas é o quanto custa produzir a peça — é isso que sai da venda antes de qualquer outra coisa.</div>
-                </div>
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Peça</th>
-                      <th style={{ width: 150 }}>Linha</th>
-                      <th className="num">Tecido</th>
-                      <th className="num">Estampa</th>
-                      <th className="num">Costura</th>
-                      <th className="num">Sacolinha</th>
-                      <th className="num">Adesivo</th>
-                      <th className="num">Outros</th>
-                      <th className="num">Total</th>
-                      <th style={{ width: 40 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {productCosts.map((p) => {
-                      const total = p.tecido + p.estampa + p.costura + p.sacolinha + p.adesivo + p.outros_acabamentos;
-                      return (
-                        <tr key={p.sku}>
-                          <td className="sku">
-                            <input
-                              className="cell-text"
-                              defaultValue={p.product_name}
-                              onBlur={(e) => handleProductNameBlur(p.sku, e.target.value)}
-                              style={{ width: 160, display: "block", marginBottom: 4 }}
-                            />
-                            <input
-                              className="cell-text sku-id-input"
-                              defaultValue={p.sku}
-                              title="SKU — precisa ser exatamente igual ao SKU real cadastrado na Shopify, senão a venda não casa com esse custo"
-                              onBlur={(e) => handleSkuBlur(p.sku, e.target.value)}
-                              style={{ width: 160, display: "block" }}
-                            />
-                            {total === 0 && (
-                              <span className="margin-pill low" style={{ marginTop: 6 }} title="Peça criada automaticamente pela primeira venda — falta preencher o custo">
-                                custo zerado
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <div className="method-toggle">
-                              <button
-                                type="button"
-                                className={p.product_line === "basico" ? "active" : ""}
-                                onClick={() => handleLineChange(p.sku, "basico")}
-                              >
-                                Básico
-                              </button>
-                              <button
-                                type="button"
-                                className={p.product_line === "exclusivo" ? "active" : ""}
-                                onClick={() => handleLineChange(p.sku, "exclusivo")}
-                              >
-                                Exclusivo
-                              </button>
-                            </div>
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.tecido)} onBlur={(e) => handleProductCostBlur(p.sku, "tecido", e.target.value)} />
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.estampa)} onBlur={(e) => handleProductCostBlur(p.sku, "estampa", e.target.value)} />
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.costura)} onBlur={(e) => handleProductCostBlur(p.sku, "costura", e.target.value)} />
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.sacolinha)} onBlur={(e) => handleProductCostBlur(p.sku, "sacolinha", e.target.value)} />
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.adesivo)} onBlur={(e) => handleProductCostBlur(p.sku, "adesivo", e.target.value)} />
-                          </td>
-                          <td className="num">
-                            <input className="cell-input" defaultValue={money(p.outros_acabamentos)} onBlur={(e) => handleProductCostBlur(p.sku, "outros_acabamentos", e.target.value)} />
-                          </td>
-                          <td className="num total-cell">{money(total)}</td>
-                          <td>
-                            <div className="icon-cell" onClick={() => handleDeleteProduct(p.sku)}>✕</div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <tr>
-                      <td className="sku">
-                        <input
-                          className="cell-text"
-                          placeholder="nome da peça"
-                          style={{ width: 180 }}
-                          value={newProduct.product_name}
-                          onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
-                        />
-                      </td>
-                      <td>
-                        <div className="method-toggle">
-                          <button
-                            type="button"
-                            className={newProduct.product_line === "basico" ? "active" : ""}
-                            onClick={() => setNewProduct((s) => ({ ...s, product_line: "basico" }))}
-                          >
-                            Básico
-                          </button>
-                          <button
-                            type="button"
-                            className={newProduct.product_line === "exclusivo" ? "active" : ""}
-                            onClick={() => setNewProduct((s) => ({ ...s, product_line: "exclusivo" }))}
-                          >
-                            Exclusivo
-                          </button>
-                        </div>
-                      </td>
-                      {(["tecido", "estampa", "costura", "sacolinha", "adesivo", "outros_acabamentos"] as const).map((field) => (
-                        <td className="num" key={field}>
-                          <input
-                            className="cell-input"
-                            value={money(newProduct[field])}
-                            onChange={(e) => {
-                              const v = parseMoney(e.target.value);
-                              if (v !== null) setNewProduct((s) => ({ ...s, [field]: v }));
-                            }}
-                          />
-                        </td>
-                      ))}
-                      <td className="num total-cell">
-                        {money(newProduct.tecido + newProduct.estampa + newProduct.costura + newProduct.sacolinha + newProduct.adesivo + newProduct.outros_acabamentos)}
-                      </td>
-                      <td>
-                        <div className="icon-cell" onClick={handleAddProduct}>+</div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <>
+              <ProductLinePanel
+                title="Custo de cada peça — Drop Básico"
+                products={productCosts.filter((p) => p.product_line === "basico")}
+                newProduct={newProductBasico}
+                setNewProduct={setNewProductBasico}
+                onCostBlur={handleProductCostBlur}
+                onNameBlur={handleProductNameBlur}
+                onSkuBlur={handleSkuBlur}
+                onMove={(sku) => handleLineChange(sku, "exclusivo")}
+                onDelete={handleDeleteProduct}
+                onAdd={() => handleAddProduct(newProductBasico, () => setNewProductBasico(emptyProductCost("basico")))}
+                moveLabel="mover pra Exclusivo"
+              />
+              <ProductLinePanel
+                title="Custo de cada peça — Exclusivos"
+                products={productCosts.filter((p) => p.product_line === "exclusivo")}
+                newProduct={newProductExclusivo}
+                setNewProduct={setNewProductExclusivo}
+                onCostBlur={handleProductCostBlur}
+                onNameBlur={handleProductNameBlur}
+                onSkuBlur={handleSkuBlur}
+                onMove={(sku) => handleLineChange(sku, "basico")}
+                onDelete={handleDeleteProduct}
+                onAdd={() => handleAddProduct(newProductExclusivo, () => setNewProductExclusivo(emptyProductCost("exclusivo")))}
+                moveLabel="mover pra Básico"
+              />
+            </>
           )}
         </>
       )}
