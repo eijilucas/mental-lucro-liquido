@@ -63,7 +63,8 @@ export function Admin() {
   const [overhead, setOverhead] = useState<OverheadRow[]>([]);
   const [feeRates, setFeeRates] = useState<FeeRatesRow | null>(null);
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
-  const [newOverhead, setNewOverhead] = useState({ category: "", amount: "0,00", isMarketing: false, method: "per_unit" as OverheadRow["allocation_method"] });
+  const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
+  const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProduct, setNewProduct] = useState<ProductCostRow>(emptyProductCost);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,17 +107,20 @@ export function Admin() {
     await deleteOverhead(id);
   }
 
-  async function handleAddOverhead() {
-    const amount = parseMoney(newOverhead.amount) ?? 0;
-    if (!newOverhead.category.trim()) return;
-    const row = await insertOverhead({
-      category: newOverhead.category.trim(),
-      amount,
-      is_marketing: newOverhead.isMarketing,
-      allocation_method: newOverhead.method,
-    });
+  async function handleAddMarketing() {
+    const amount = parseMoney(newMarketing.amount) ?? 0;
+    if (!newMarketing.category.trim()) return;
+    const row = await insertOverhead({ category: newMarketing.category.trim(), amount, is_marketing: true, allocation_method: newMarketing.method });
     setOverhead((rows) => [...rows, row]);
-    setNewOverhead({ category: "", amount: "0,00", isMarketing: false, method: "per_unit" });
+    setNewMarketing({ category: "", amount: "0,00", method: "per_revenue" });
+  }
+
+  async function handleAddFixed() {
+    const amount = parseMoney(newFixed.amount) ?? 0;
+    if (!newFixed.category.trim()) return;
+    const row = await insertOverhead({ category: newFixed.category.trim(), amount, is_marketing: false, allocation_method: newFixed.method });
+    setOverhead((rows) => [...rows, row]);
+    setNewFixed({ category: "", amount: "0,00", method: "per_unit" });
   }
 
   async function handleFeeRatesSave() {
@@ -217,9 +221,9 @@ export function Admin() {
               <div className="panel">
                 <div className="panel-head">
                   <div>
-                    <div className="panel-title">Gastos do mês — {monthLabel(currentMonthStart())}</div>
+                    <div className="panel-title">Marketing</div>
                     <div className="panel-hint">
-                      Cada gasto pode ser dividido igual entre todas as peças vendidas, ou variável, proporcional ao valor de cada venda.
+                      Cada gasto pode ser fixo (mesmo valor pra toda peça vendida) ou variável (proporcional ao valor de cada venda).
                     </div>
                   </div>
                 </div>
@@ -227,7 +231,6 @@ export function Admin() {
                   <table>
                     <thead>
                       <tr>
-                        <th style={{ width: 80 }}>Tipo</th>
                         <th>Nome do gasto</th>
                         <th className="num" style={{ width: 120 }}>Valor</th>
                         <th style={{ width: 170 }}>Como dividir</th>
@@ -235,11 +238,8 @@ export function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {overhead.map((row) => (
+                      {overhead.filter((row) => row.is_marketing).map((row) => (
                         <tr key={row.id}>
-                          <td>
-                            <span className={`tag ${row.is_marketing ? "marketing" : "fixo"}`}>{row.is_marketing ? "marketing" : "fixo"}</span>
-                          </td>
                           <td>{row.category}</td>
                           <td className="num">
                             <input className="cell-input" defaultValue={money(row.amount)} onBlur={(e) => handleAmountBlur(row.id, e.target.value)} />
@@ -252,7 +252,7 @@ export function Admin() {
                                 className={row.allocation_method === "per_unit" ? "active" : ""}
                                 onClick={() => handleMethodChange(row.id, "per_unit")}
                               >
-                                Igual
+                                Fixo
                               </button>
                               <button
                                 type="button"
@@ -271,37 +271,19 @@ export function Admin() {
                       ))}
                       <tr>
                         <td>
-                          <div className="method-toggle">
-                            <button
-                              type="button"
-                              className={!newOverhead.isMarketing ? "active" : ""}
-                              onClick={() => setNewOverhead((s) => ({ ...s, isMarketing: false }))}
-                            >
-                              Fixo
-                            </button>
-                            <button
-                              type="button"
-                              className={newOverhead.isMarketing ? "active" : ""}
-                              onClick={() => setNewOverhead((s) => ({ ...s, isMarketing: true }))}
-                            >
-                              Marketing
-                            </button>
-                          </div>
-                        </td>
-                        <td>
                           <input
                             className="cell-text"
-                            placeholder="nome do novo gasto..."
-                            style={{ width: 180 }}
-                            value={newOverhead.category}
-                            onChange={(e) => setNewOverhead((s) => ({ ...s, category: e.target.value }))}
+                            placeholder="nome do novo gasto de marketing..."
+                            style={{ width: 220 }}
+                            value={newMarketing.category}
+                            onChange={(e) => setNewMarketing((s) => ({ ...s, category: e.target.value }))}
                           />
                         </td>
                         <td className="num">
                           <input
                             className="cell-input"
-                            value={newOverhead.amount}
-                            onChange={(e) => setNewOverhead((s) => ({ ...s, amount: e.target.value }))}
+                            value={newMarketing.amount}
+                            onChange={(e) => setNewMarketing((s) => ({ ...s, amount: e.target.value }))}
                           />
                         </td>
                         <td>
@@ -309,23 +291,120 @@ export function Admin() {
                             <button
                               type="button"
                               title="Mesmo valor pra toda peça vendida no mês, dividido igualmente"
-                              className={newOverhead.method === "per_unit" ? "active" : ""}
-                              onClick={() => setNewOverhead((s) => ({ ...s, method: "per_unit" }))}
+                              className={newMarketing.method === "per_unit" ? "active" : ""}
+                              onClick={() => setNewMarketing((s) => ({ ...s, method: "per_unit" }))}
                             >
-                              Igual
+                              Fixo
                             </button>
                             <button
                               type="button"
                               title="Valor proporcional ao preço de cada venda — quem vendeu mais caro absorve mais"
-                              className={newOverhead.method === "per_revenue" ? "active" : ""}
-                              onClick={() => setNewOverhead((s) => ({ ...s, method: "per_revenue" }))}
+                              className={newMarketing.method === "per_revenue" ? "active" : ""}
+                              onClick={() => setNewMarketing((s) => ({ ...s, method: "per_revenue" }))}
                             >
                               Variável
                             </button>
                           </div>
                         </td>
                         <td>
-                          <div className="icon-cell" onClick={handleAddOverhead}>+</div>
+                          <div className="icon-cell" onClick={handleAddMarketing}>+</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="panel-title">Fixos</div>
+                    <div className="panel-hint">
+                      Custos estruturais do negócio — plataforma, folha, contabilidade — que existem independente de quanto vendeu.
+                    </div>
+                  </div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Nome do gasto</th>
+                        <th className="num" style={{ width: 120 }}>Valor</th>
+                        <th style={{ width: 170 }}>Como dividir</th>
+                        <th style={{ width: 40 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overhead.filter((row) => !row.is_marketing).map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.category}</td>
+                          <td className="num">
+                            <input className="cell-input" defaultValue={money(row.amount)} onBlur={(e) => handleAmountBlur(row.id, e.target.value)} />
+                          </td>
+                          <td>
+                            <div className="method-toggle">
+                              <button
+                                type="button"
+                                title="Mesmo valor pra toda peça vendida no mês, dividido igualmente"
+                                className={row.allocation_method === "per_unit" ? "active" : ""}
+                                onClick={() => handleMethodChange(row.id, "per_unit")}
+                              >
+                                Fixo
+                              </button>
+                              <button
+                                type="button"
+                                title="Valor proporcional ao preço de cada venda — quem vendeu mais caro absorve mais"
+                                className={row.allocation_method === "per_revenue" ? "active" : ""}
+                                onClick={() => handleMethodChange(row.id, "per_revenue")}
+                              >
+                                Variável
+                              </button>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="icon-cell" onClick={() => handleDeleteOverhead(row.id)}>✕</div>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td>
+                          <input
+                            className="cell-text"
+                            placeholder="nome do novo gasto fixo..."
+                            style={{ width: 220 }}
+                            value={newFixed.category}
+                            onChange={(e) => setNewFixed((s) => ({ ...s, category: e.target.value }))}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            className="cell-input"
+                            value={newFixed.amount}
+                            onChange={(e) => setNewFixed((s) => ({ ...s, amount: e.target.value }))}
+                          />
+                        </td>
+                        <td>
+                          <div className="method-toggle">
+                            <button
+                              type="button"
+                              title="Mesmo valor pra toda peça vendida no mês, dividido igualmente"
+                              className={newFixed.method === "per_unit" ? "active" : ""}
+                              onClick={() => setNewFixed((s) => ({ ...s, method: "per_unit" }))}
+                            >
+                              Fixo
+                            </button>
+                            <button
+                              type="button"
+                              title="Valor proporcional ao preço de cada venda — quem vendeu mais caro absorve mais"
+                              className={newFixed.method === "per_revenue" ? "active" : ""}
+                              onClick={() => setNewFixed((s) => ({ ...s, method: "per_revenue" }))}
+                            >
+                              Variável
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="icon-cell" onClick={handleAddFixed}>+</div>
                         </td>
                       </tr>
                     </tbody>

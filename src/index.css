@@ -314,10 +314,6 @@ td.sku .sku-id { display: block; font-family: var(--font-body); font-size: 11px;
 .margin-pill.mid { color: var(--ink-faint); border-color: var(--border-strong); }
 .margin-pill.low { color: var(--negative); border-color: var(--negative); }
 
-.tag { display: inline-block; font-family: var(--font-body); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--border-strong); color: var(--ink-faint); }
-.tag.marketing { color: var(--accent); border-color: var(--accent); }
-.tag.fixo { color: var(--ink-faint); }
-
 /* ---- Method toggle (por peça / por venda) ---- */
 .method-toggle { display: inline-flex; border: 1px solid var(--border-strong); }
 .method-toggle button {
