@@ -219,7 +219,7 @@ export function Admin() {
                   <div>
                     <div className="panel-title">Gastos do mês — {monthLabel(currentMonthStart())}</div>
                     <div className="panel-hint">
-                      Cada gasto pode ser fixo (o mesmo valor pra toda peça vendida) ou variável (proporcional ao valor de cada venda).
+                      Cada gasto pode ser dividido igual entre todas as peças vendidas, ou variável, proporcional ao valor de cada venda.
                     </div>
                   </div>
                 </div>
@@ -252,7 +252,7 @@ export function Admin() {
                                 className={row.allocation_method === "per_unit" ? "active" : ""}
                                 onClick={() => handleMethodChange(row.id, "per_unit")}
                               >
-                                Fixo
+                                Igual
                               </button>
                               <button
                                 type="button"
@@ -312,7 +312,7 @@ export function Admin() {
                               className={newOverhead.method === "per_unit" ? "active" : ""}
                               onClick={() => setNewOverhead((s) => ({ ...s, method: "per_unit" }))}
                             >
-                              Fixo
+                              Igual
                             </button>
                             <button
                               type="button"
