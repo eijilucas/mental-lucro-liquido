@@ -31,6 +31,14 @@ function parseMoney(value: string): number | null {
   const parsed = Number(value.replace(/\./g, "").replace(",", "."));
   return Number.isNaN(parsed) ? null : parsed;
 }
+// Campos de percentual usam toFixed(2), que gera "6.00" (ponto decimal,
+// sem separador de milhar) — parseMoney interpretaria o ponto como
+// separador de milhar e leria "600". Percentual nunca precisa de
+// separador de milhar, então essa função só troca vírgula por ponto.
+function parsePercent(value: string): number | null {
+  const parsed = Number(value.replace("%", "").trim().replace(",", "."));
+  return Number.isNaN(parsed) ? null : parsed;
+}
 const DIACRITICS_RE = new RegExp(String.fromCharCode(91) + "\\u0300-\\u036f" + String.fromCharCode(93), "g");
 function skuFromName(name: string): string {
   const slug = name
@@ -69,6 +77,7 @@ export function Admin() {
   const [newProduct, setNewProduct] = useState<ProductCostRow>(emptyProductCost);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [feeSaved, setFeeSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +142,8 @@ export function Admin() {
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
       desconto_medio_pct: feeRates.desconto_medio_pct,
     });
+    setFeeSaved(true);
+    setTimeout(() => setFeeSaved(false), 2500);
   }
 
   async function handleProductCostBlur(sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name">, value: string) {
@@ -433,7 +444,10 @@ export function Admin() {
                   <div className="panel-title">Taxas de venda — atuais</div>
                   <div className="panel-hint">Aplicadas em cima do valor de cada venda. Mudanças valem a partir da próxima atualização.</div>
                 </div>
-                <button className="btn btn-primary" onClick={handleFeeRatesSave}>Salvar</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {feeSaved && <span style={{ color: "var(--positive)", fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase" }}>Salvo</span>}
+                  <button className="btn btn-primary" onClick={handleFeeRatesSave}>Salvar</button>
+                </div>
               </div>
               <div className="form-grid">
                 <div className="field">
@@ -441,7 +455,7 @@ export function Admin() {
                   <input
                     defaultValue={`${(feeRates.taxa_shopify_pct * 100).toFixed(2)}%`}
                     onBlur={(e) => {
-                      const v = parseMoney(e.target.value.replace("%", ""));
+                      const v = parsePercent(e.target.value);
                       if (v !== null) setFeeRates({ ...feeRates, taxa_shopify_pct: v / 100 });
                     }}
                   />
@@ -451,7 +465,7 @@ export function Admin() {
                   <input
                     defaultValue={`${(feeRates.taxa_gateway_pct * 100).toFixed(2)}%`}
                     onBlur={(e) => {
-                      const v = parseMoney(e.target.value.replace("%", ""));
+                      const v = parsePercent(e.target.value);
                       if (v !== null) setFeeRates({ ...feeRates, taxa_gateway_pct: v / 100 });
                     }}
                   />
@@ -461,7 +475,7 @@ export function Admin() {
                   <input
                     defaultValue={`${(feeRates.imposto_pct * 100).toFixed(2)}%`}
                     onBlur={(e) => {
-                      const v = parseMoney(e.target.value.replace("%", ""));
+                      const v = parsePercent(e.target.value);
                       if (v !== null) setFeeRates({ ...feeRates, imposto_pct: v / 100 });
                     }}
                   />
@@ -471,7 +485,7 @@ export function Admin() {
                   <input
                     defaultValue={`${(feeRates.comissao_influencer_pct * 100).toFixed(2)}%`}
                     onBlur={(e) => {
-                      const v = parseMoney(e.target.value.replace("%", ""));
+                      const v = parsePercent(e.target.value);
                       if (v !== null) setFeeRates({ ...feeRates, comissao_influencer_pct: v / 100 });
                     }}
                   />
