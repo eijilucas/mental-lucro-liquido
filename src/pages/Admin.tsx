@@ -30,6 +30,18 @@ function parseMoney(value: string): number | null {
   const parsed = Number(value.replace(/\./g, "").replace(",", "."));
   return Number.isNaN(parsed) ? null : parsed;
 }
+const DIACRITICS_RE = new RegExp(String.fromCharCode(91) + "\\u0300-\\u036f" + String.fromCharCode(93), "g");
+function skuFromName(name: string): string {
+  const slug = name
+    .normalize("NFD")
+    .replace(DIACRITICS_RE, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${slug}-${suffix}`;
+}
 function monthLabel(monthStr: string) {
   const [y, m] = monthStr.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
@@ -126,8 +138,8 @@ export function Admin() {
   }
 
   async function handleAddProduct() {
-    if (!newProduct.sku.trim() || !newProduct.product_name.trim()) return;
-    const row = await insertProductCost(newProduct);
+    if (!newProduct.product_name.trim()) return;
+    const row = await insertProductCost({ ...newProduct, sku: skuFromName(newProduct.product_name) });
     setProductCosts((rows) => [...rows, row]);
     setNewProduct(emptyProductCost);
   }
@@ -233,14 +245,24 @@ export function Admin() {
                             <input className="cell-input" defaultValue={money(row.amount)} onBlur={(e) => handleAmountBlur(row.id, e.target.value)} />
                           </td>
                           <td>
-                            <select
-                              className="cell-select"
-                              value={row.allocation_method}
-                              onChange={(e) => handleMethodChange(row.id, e.target.value as OverheadRow["allocation_method"])}
-                            >
-                              <option value="per_revenue">proporcional à venda</option>
-                              <option value="per_unit">igual pra todas</option>
-                            </select>
+                            <div className="method-toggle">
+                              <button
+                                type="button"
+                                title="Divide o gasto igualmente entre todas as peças vendidas no mês"
+                                className={row.allocation_method === "per_unit" ? "active" : ""}
+                                onClick={() => handleMethodChange(row.id, "per_unit")}
+                              >
+                                Por peça
+                              </button>
+                              <button
+                                type="button"
+                                title="Divide o gasto proporcional ao valor de cada venda"
+                                className={row.allocation_method === "per_revenue" ? "active" : ""}
+                                onClick={() => handleMethodChange(row.id, "per_revenue")}
+                              >
+                                Por venda
+                              </button>
+                            </div>
                           </td>
                           <td>
                             <div className="icon-cell" onClick={() => handleDeleteOverhead(row.id)}>✕</div>
@@ -275,14 +297,24 @@ export function Admin() {
                           />
                         </td>
                         <td>
-                          <select
-                            className="cell-select"
-                            value={newOverhead.method}
-                            onChange={(e) => setNewOverhead((s) => ({ ...s, method: e.target.value as OverheadRow["allocation_method"] }))}
-                          >
-                            <option value="per_unit">igual pra todas</option>
-                            <option value="per_revenue">proporcional à venda</option>
-                          </select>
+                          <div className="method-toggle">
+                            <button
+                              type="button"
+                              title="Divide o gasto igualmente entre todas as peças vendidas no mês"
+                              className={newOverhead.method === "per_unit" ? "active" : ""}
+                              onClick={() => setNewOverhead((s) => ({ ...s, method: "per_unit" }))}
+                            >
+                              Por peça
+                            </button>
+                            <button
+                              type="button"
+                              title="Divide o gasto proporcional ao valor de cada venda"
+                              className={newOverhead.method === "per_revenue" ? "active" : ""}
+                              onClick={() => setNewOverhead((s) => ({ ...s, method: "per_revenue" }))}
+                            >
+                              Por venda
+                            </button>
+                          </div>
                         </td>
                         <td>
                           <div className="icon-cell" onClick={handleAddOverhead}>+</div>
@@ -416,15 +448,8 @@ export function Admin() {
                       <td className="sku">
                         <input
                           className="cell-text"
-                          placeholder="SKU"
-                          style={{ width: 90 }}
-                          value={newProduct.sku}
-                          onChange={(e) => setNewProduct((s) => ({ ...s, sku: e.target.value }))}
-                        />
-                        <input
-                          className="cell-text"
                           placeholder="nome da peça"
-                          style={{ width: 140, marginTop: 4 }}
+                          style={{ width: 180 }}
                           value={newProduct.product_name}
                           onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
                         />

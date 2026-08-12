@@ -318,26 +318,22 @@ td.sku .sku-id { display: block; font-family: var(--font-body); font-size: 11px;
 .tag.marketing { color: var(--accent); border-color: var(--accent); }
 .tag.fixo { color: var(--ink-faint); }
 
-/* ---- Rateio card (dashboard) ---- */
-.rateio-list { display: flex; flex-direction: column; }
-.rateio-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 10px; }
-.rateio-item:last-child { border-bottom: none; }
-.rateio-name { font-family: var(--font-body); font-size: 13px; color: var(--ink); }
-.rateio-name .rateio-sub { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
-.method-pill { font-family: var(--font-body); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--border-strong); color: var(--ink-faint); padding: 3px 8px; white-space: nowrap; }
-.rateio-amt { font-family: var(--font-display); font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 70px; text-align: right; color: var(--ink); }
-
-/* ---- Sync status ---- */
-.sync-strip { display: flex; align-items: center; gap: 9px; padding: 14px 24px; border-top: 1px solid var(--border); font-family: var(--font-body); font-size: 12px; letter-spacing: 0.02em; color: var(--ink-faint); }
-.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--positive); box-shadow: 0 0 0 3px var(--positive-soft); flex-shrink: 0; }
-.sync-strip b { color: var(--ink); font-weight: 600; }
-.sync-strip .src { margin-left: auto; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
-
-/* ---- Audit log (admin) ---- */
-.audit-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; gap: 12px; }
-.audit-row:last-child { border-bottom: none; }
-.audit-who { color: var(--ink-dim); }
-.audit-when { font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); white-space: nowrap; }
+/* ---- Method toggle (por peça / por venda) ---- */
+.method-toggle { display: inline-flex; border: 1px solid var(--border-strong); }
+.method-toggle button {
+  font: inherit;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ink-faint);
+  border: none;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+.method-toggle button + button { border-left: 1px solid var(--border-strong); }
+.method-toggle button.active { background: var(--accent-soft-2); color: var(--accent); font-weight: 600; }
 
 @media (max-width: 900px) {
   .grid { grid-template-columns: 1fr; }
