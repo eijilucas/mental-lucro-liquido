@@ -227,7 +227,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <div className="kpi-row">
         <div className="kpi">
           <div className="kpi-label">Faturamento</div>
           <div className="kpi-value">R$ {money(dre.gross_revenue)}</div>
