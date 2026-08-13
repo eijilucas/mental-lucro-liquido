@@ -57,7 +57,23 @@ npm run dev
 Copiar `.env.example` pra `.env` e preencher com a URL e a anon key do
 projeto (já feito neste ambiente).
 
-## Webhook da Shopify — ativo
+## Duas lojas Shopify diferentes
+
+Apesar do nome parecido, `m3ntalmadness.myshopify.com` e
+`mental-madness-basic.myshopify.com` são **duas lojas Shopify
+independentes**, cada uma com seu próprio app custom (client ID/secret):
+
+- `m3ntalmadness.myshopify.com` → **Drop Básico** (só a coleção
+  "Basic MM Drop" é importada de lá).
+- `mental-madness-basic.myshopify.com` → **Exclusivos** (a loja inteira
+  é importada — não tem filtro de coleção).
+
+Tudo — webhook e importação — lida com as duas ao mesmo tempo. Os
+secrets seguem o padrão `SHOPIFY_*_BASICO` / `SHOPIFY_*_EXCLUSIVO`
+(`STORE_DOMAIN`, `CLIENT_ID`, `CLIENT_SECRET` de cada uma), já
+configurados no projeto Supabase.
+
+## Webhook da Shopify — ativo nas duas lojas
 
 Código em `supabase/functions/shopify-webhook/index.ts`. Recebe
 `orders/paid`, `orders/cancelled` e `refunds/create` e mantém
@@ -65,47 +81,42 @@ Código em `supabase/functions/shopify-webhook/index.ts`. Recebe
 `shopify_line_item_id` — a Shopify pode reenviar o mesmo webhook mais de
 uma vez, então não pode duplicar).
 
-**Já implantado e com os 3 webhooks registrados** na loja
-`m3ntalmadness.myshopify.com`, apontando pra
-`https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`.
+**Já implantado, com os 3 webhooks registrados nas duas lojas**,
+apontando pra `https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`.
+Como as duas mandam pra essa mesma URL, a function tenta a assinatura
+HMAC contra o secret de cada loja pra descobrir de qual veio — isso
+também decide se a peça criada automaticamente entra como "basico" ou
+"exclusivo".
 
-App usado: "Basic JackPot" (custom app criado via Shopify Dev Dashboard —
-modelo 2026, sem Partner Organization, só permissão de app-development na
-loja). Credenciais (`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`,
-`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_WEBHOOK_SECRET`) já configuradas como
-secrets no projeto Supabase.
-
-**Como o matching peça↔venda funciona:** por `shopify_variant_id`, não
-por SKU — a loja não tem SKU cadastrado em nenhuma variante na Shopify
+**Como o matching peça↔venda funciona:** por `shopify_product_id`, não
+por SKU — nenhuma das duas lojas tem SKU cadastrado em variante nenhuma
 (`"sku": null` em toda a API), então usar SKU deixaria toda venda sem
-custo batido. `shopify_variant_id` sempre existe (gerado pela própria
-Shopify) e é a chave real de `product_costs` agora; o campo SKU continua
-existindo na tela "Custo de cada peça", mas é só informativo/opcional, não
-tem mais função no cálculo. `product_costs.id` (uuid) é a chave usada por
-todas as edições no admin (custo, nome, linha, SKU, exclusão).
+custo batido. `shopify_product_id` sempre existe (gerado pela própria
+Shopify) e é a chave real de `product_costs` agora — uma linha por PEÇA,
+não por variante de tamanho (P/M/G compartilham o mesmo custo de
+produção). O campo SKU continua existindo na tabela, mas sumiu da tela
+("Custo de cada peça") porque não tem mais função nenhuma no cálculo.
+`product_costs.id` (uuid) é a chave usada por todas as edições no admin.
 
-O próprio `shopify-webhook` cria a linha da peça sozinho (variant_id +
-nome certos, direto do payload da Shopify) na primeira venda daquele
-variant_id — o admin só precisa preencher os números de custo depois. As
-peças criadas assim aparecem com o selo "custo zerado" na tela até
-alguém preencher.
+O próprio `shopify-webhook` cria a linha da peça sozinho (product_id +
+nome certos, direto do payload) na primeira venda daquele produto — o
+admin só precisa preencher os números de custo depois. As peças criadas
+assim aparecem com o selo "custo zerado" na tela até alguém preencher.
 
-## Importar o catálogo da Shopify — automático
+## Importar o catálogo da Shopify — automático, das duas lojas
 
-Código em `supabase/functions/shopify-import-products/index.ts`. Busca só
-os produtos da coleção **"Basic MM Drop"** na Shopify (API de Produtos,
-com paginação) e cria uma linha **por peça** (não por variante — P/M/G
-compartilham o mesmo custo) em `product_costs`, custo zerado. Não
-sobrescreve custo já preenchido (`ignoreDuplicates`), então roda de novo
-sem bagunçar nada.
+Código em `supabase/functions/shopify-import-products/index.ts`. Numa
+chamada só, busca produto das duas lojas (Básico filtrado pela coleção
+"Basic MM Drop", Exclusivos sem filtro) e cria uma linha **por peça**
+(não por variante) em `product_costs`, custo zerado, com o
+`product_line` certo pra cada uma. Não sobrescreve custo já preenchido
+(`ignoreDuplicates`), então roda de novo sem bagunçar nada.
 
 **Roda sozinha todo dia às 6h UTC (3h da manhã em Brasília)**, via
 `pg_cron` + `pg_net` (migração `20260812000007_schedule_import.sql`).
-Assim, todo produto novo que o Vitor publicar na Shopify dentro da
-coleção "Basic MM Drop" aparece na tela "Custo de cada peça" no dia
-seguinte, sem precisar ninguém lembrar de rodar nada na mão. Os
-"Exclusivos" continuam entrando pelo jeito de sempre: o `shopify-webhook`
-cria a linha sozinho na primeira venda de cada um.
+Assim, todo produto novo que for publicado em qualquer uma das duas
+lojas aparece na tela "Custo de cada peça" no dia seguinte, sem precisar
+ninguém lembrar de rodar nada na mão.
 
 O secret usado pelo cron pra chamar a function fica no **Supabase Vault**
 (`admin_import_secret`), não em texto puro em nenhum arquivo — só o nome

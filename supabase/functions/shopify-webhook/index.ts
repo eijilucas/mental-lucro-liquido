@@ -2,20 +2,34 @@
 // refunds/create) e mantém `sale_revenue` atualizada — sem depender do
 // Projeto A, então pega venda com ou sem cupom de afiliado.
 //
+// Duas lojas Shopify diferentes mandam webhook pra essa mesma URL: uma
+// só com o Drop Básico, outra só com os Exclusivos. Cada uma assina o
+// webhook com o Client Secret do respectivo app, então a verificação
+// tenta os dois secrets — o que bater identifica de qual loja veio (e
+// portanto qual product_line usar ao criar a linha de custo na primeira
+// venda de um produto novo).
+//
 // Configuração necessária antes de registrar o webhook na Shopify:
-//   npx supabase secrets set SHOPIFY_WEBHOOK_SECRET=<secret da Shopify> --project-ref <ref>
+//   npx supabase secrets set SHOPIFY_CLIENT_SECRET_BASICO=<secret do app da loja básico> --project-ref <ref>
+//   npx supabase secrets set SHOPIFY_CLIENT_SECRET_EXCLUSIVO=<secret do app da loja exclusivos> --project-ref <ref>
 // (SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já existem por padrão em toda
 // Edge Function, não precisa configurar.)
 //
-// Na Shopify (Settings → Notifications → Webhooks, ou via Admin API),
-// registrar três webhooks apontando pra essa mesma URL:
+// Em CADA UMA das duas lojas (Settings → Notifications → Webhooks, ou via
+// Admin API), registrar três webhooks apontando pra essa mesma URL:
 //   orders/paid, orders/cancelled, refunds/create
 // (o formato é JSON; a função decide o que fazer olhando o header
 // X-Shopify-Topic.)
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-const SHOPIFY_WEBHOOK_SECRET = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") ?? "";
+type ProductLine = "basico" | "exclusivo";
+
+const STORE_SECRETS: { secret: string; productLine: ProductLine }[] = [
+  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_BASICO") ?? "", productLine: "basico" },
+  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_EXCLUSIVO") ?? "", productLine: "exclusivo" },
+].filter((s) => s.secret);
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -26,18 +40,27 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function verifyHmac(rawBody: string, hmacHeader: string | null): Promise<boolean> {
-  if (!hmacHeader || !SHOPIFY_WEBHOOK_SECRET) return false;
+async function computeHmac(rawBody: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(SHOPIFY_WEBHOOK_SECRET),
+    new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
   );
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-  const computed = btoa(String.fromCharCode(...new Uint8Array(signature)));
-  return timingSafeEqual(computed, hmacHeader);
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
+// Testa a assinatura contra os secrets das duas lojas — devolve qual
+// product_line bateu, ou null se nenhuma bateu (assinatura inválida).
+async function identifyStore(rawBody: string, hmacHeader: string | null): Promise<ProductLine | null> {
+  if (!hmacHeader) return null;
+  for (const { secret, productLine } of STORE_SECRETS) {
+    const computed = await computeHmac(rawBody, secret);
+    if (timingSafeEqual(computed, hmacHeader)) return productLine;
+  }
+  return null;
 }
 
 interface ShopifyLineItem {
@@ -69,7 +92,7 @@ interface ShopifyRefund {
   refund_line_items: ShopifyRefundLineItem[];
 }
 
-async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder) {
+async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, productLine: ProductLine) {
   // Casa a venda com o custo da peça pelo product_id, não pelo SKU nem
   // pelo variant_id — a loja não tem SKU cadastrado em nenhum produto na
   // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
@@ -103,22 +126,26 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder) {
         product_sku: item.sku,
         product_name: item.title ?? item.name ?? "Sem nome",
       })),
+    productLine,
   );
 }
 
 // Cria a linha da peça em `product_costs` na primeira venda que aparecer
 // com aquele product_id — custo tudo zerado, só o nome certo (veio
-// direto da Shopify, sem o tamanho/variante). O admin só precisa
-// preencher os números depois.
+// direto da Shopify, sem o tamanho/variante) e a linha certa (básico ou
+// exclusivo, conforme qual das duas lojas mandou o webhook). O admin só
+// precisa preencher os números depois.
 async function ensureProductCostStubs(
   supabase: SupabaseClient,
   saleRows: { shopify_product_id: number; product_sku: string | null; product_name: string }[],
+  productLine: ProductLine,
 ) {
   const uniqueByProduct = new Map(saleRows.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
   const stubs = Array.from(uniqueByProduct, ([shopify_product_id, { sku, product_name }]) => ({
     shopify_product_id,
     sku,
     product_name,
+    product_line: productLine,
     tecido: 0,
     estampa: 0,
     costura: 0,
@@ -181,7 +208,8 @@ Deno.serve(async (req) => {
   const hmacHeader = req.headers.get("X-Shopify-Hmac-Sha256");
   const topic = req.headers.get("X-Shopify-Topic") ?? "";
 
-  if (!(await verifyHmac(rawBody, hmacHeader))) {
+  const productLine = await identifyStore(rawBody, hmacHeader);
+  if (!productLine) {
     return new Response("Assinatura inválida", { status: 401 });
   }
 
@@ -190,7 +218,7 @@ Deno.serve(async (req) => {
 
   try {
     if (topic === "orders/paid") {
-      await handleOrderPaid(supabase, payload as ShopifyOrder);
+      await handleOrderPaid(supabase, payload as ShopifyOrder, productLine);
     } else if (topic === "orders/cancelled") {
       await handleOrderCancelled(supabase, payload as { id: number });
     } else if (topic === "refunds/create") {
