@@ -101,6 +101,8 @@ body {
   cursor: pointer;
 }
 .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.icon-btn:disabled:hover { border-color: var(--border-strong); color: var(--ink-faint); }
 
 h1.page-title {
   font-family: var(--font-display);

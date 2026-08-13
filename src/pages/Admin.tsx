@@ -1,6 +1,7 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { TopBar, AdminBackLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
+import { DateRangePicker } from "../components/DateRangePicker";
 import { supabase } from "../lib/supabase";
 import {
   fetchMonthlyOverhead,
@@ -16,8 +17,9 @@ import {
   updateProductLine,
   deleteProductCost,
   insertProductCost,
-  fetchSkuMarginForMonth,
+  fetchSkuMarginForRange,
   currentMonthStart,
+  todayStr,
   type OverheadRow,
   type FeeRatesRow,
   type ProductCostRow,
@@ -50,6 +52,18 @@ function parsePercent(value: string): number | null {
 function monthLabel(monthStr: string) {
   const [y, m] = monthStr.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+}
+function dateLabelShort(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+function rangeLabel(start: string, end: string) {
+  return start === end ? dateLabelShort(start) : `${dateLabelShort(start)} a ${dateLabelShort(end)}`;
+}
+function shiftMonth(monthStr: string, delta: number) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 function emptyProductCost(product_line: ProductCostRow["product_line"], collection: string | null = null): Omit<ProductCostRow, "id"> {
@@ -199,6 +213,9 @@ export function Admin() {
   const [pieceMargin, setPieceMargin] = useState<PieceMargin[]>([]);
   const [pieceSearch, setPieceSearch] = useState("");
   const [pieceSort, setPieceSort] = useState<{ field: keyof PieceMargin; dir: "asc" | "desc" }>({ field: "marginPct", dir: "desc" });
+  const [profitRangeStart, setProfitRangeStart] = useState(currentMonthStart());
+  const [profitRangeEnd, setProfitRangeEnd] = useState(todayStr());
+  const [overheadMonth, setOverheadMonth] = useState(currentMonthStart());
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
@@ -211,17 +228,10 @@ export function Admin() {
     let cancelled = false;
     async function load() {
       try {
-        const [overheadRows, rates, costs, margin] = await Promise.all([
-          fetchMonthlyOverhead(),
-          fetchFeeRates(),
-          fetchProductCosts(),
-          fetchSkuMarginForMonth(),
-        ]);
+        const [rates, costs] = await Promise.all([fetchFeeRates(), fetchProductCosts()]);
         if (cancelled) return;
-        setOverhead(overheadRows);
         setFeeRates(rates);
         setProductCosts(costs);
-        setPieceMargin(margin);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
       } finally {
@@ -233,6 +243,26 @@ export function Admin() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMonthlyOverhead(overheadMonth).then((rows) => {
+      if (!cancelled) setOverhead(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [overheadMonth]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSkuMarginForRange(profitRangeStart, profitRangeEnd).then((rows) => {
+      if (!cancelled) setPieceMargin(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profitRangeStart, profitRangeEnd]);
 
   async function handleAmountBlur(id: string, value: string) {
     const parsed = parseMoney(value);
@@ -254,7 +284,7 @@ export function Admin() {
   async function handleAddMarketing() {
     const amount = parseMoney(newMarketing.amount) ?? 0;
     if (!newMarketing.category.trim()) return;
-    const row = await insertOverhead({ category: newMarketing.category.trim(), amount, is_marketing: true, allocation_method: newMarketing.method });
+    const row = await insertOverhead({ category: newMarketing.category.trim(), amount, is_marketing: true, allocation_method: newMarketing.method, month: overheadMonth });
     setOverhead((rows) => [...rows, row]);
     setNewMarketing({ category: "", amount: "0,00", method: "per_revenue" });
   }
@@ -262,7 +292,7 @@ export function Admin() {
   async function handleAddFixed() {
     const amount = parseMoney(newFixed.amount) ?? 0;
     if (!newFixed.category.trim()) return;
-    const row = await insertOverhead({ category: newFixed.category.trim(), amount, is_marketing: false, allocation_method: newFixed.method });
+    const row = await insertOverhead({ category: newFixed.category.trim(), amount, is_marketing: false, allocation_method: newFixed.method, month: overheadMonth });
     setOverhead((rows) => [...rows, row]);
     setNewFixed({ category: "", amount: "0,00", method: "per_unit" });
   }
@@ -375,11 +405,11 @@ export function Admin() {
             </div>
             <div className={`tab ${tab === "overhead" ? "active" : ""}`} onClick={() => setTab("overhead")}>
               Gastos do mês
-              <span className="count">{monthLabel(currentMonthStart())}</span>
+              <span className="count">{monthLabel(overheadMonth)}</span>
             </div>
             <div className={`tab ${tab === "profit" ? "active" : ""}`} onClick={() => setTab("profit")}>
               Lucro por peça
-              <span className="count">{monthLabel(currentMonthStart())}</span>
+              <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
             </div>
           </div>
 
@@ -396,7 +426,26 @@ export function Admin() {
                 </div>
                 <div className="as-cell">
                   <div className="as-label">Mês</div>
-                  <div className="as-value">{monthLabel(currentMonthStart())}</div>
+                  <div className="as-value" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 22, height: 22, fontSize: 12 }}
+                      onClick={() => setOverheadMonth((m) => shiftMonth(m, -1))}
+                    >
+                      ‹
+                    </button>
+                    {monthLabel(overheadMonth)}
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 22, height: 22, fontSize: 12 }}
+                      onClick={() => setOverheadMonth((m) => shiftMonth(m, 1))}
+                      disabled={overheadMonth >= currentMonthStart()}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -717,16 +766,24 @@ export function Admin() {
             <div className="panel">
               <div className="panel-head">
                 <div>
-                  <div className="panel-title">Lucro por peça — {monthLabel(currentMonthStart())}</div>
-                  <div className="panel-hint">Todas as peças vendidas no mês — clique no cabeçalho pra ordenar.</div>
+                  <div className="panel-title">Lucro por peça — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
+                  <div className="panel-hint">Peças vendidas no período — clique no cabeçalho pra ordenar.</div>
                 </div>
-                <input
-                  className="cell-text"
-                  placeholder="Buscar peça..."
-                  value={pieceSearch}
-                  onChange={(e) => setPieceSearch(e.target.value)}
-                  style={{ width: 200 }}
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <DateRangePicker
+                    start={profitRangeStart}
+                    end={profitRangeEnd}
+                    maxDate={todayStr()}
+                    onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                  />
+                  <input
+                    className="cell-text"
+                    placeholder="Buscar peça..."
+                    value={pieceSearch}
+                    onChange={(e) => setPieceSearch(e.target.value)}
+                    style={{ width: 160 }}
+                  />
+                </div>
               </div>
               <div className="table-wrap">
                 <table>

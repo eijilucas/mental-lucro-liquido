@@ -109,24 +109,8 @@ export async function fetchSaleMarginForRange(start: string, end: string) {
   return data ?? [];
 }
 
-function monthRange(month: string) {
-  const start = month;
-  const [y, m] = month.split("-").map(Number);
-  const nextMonth = new Date(y, m, 1);
-  const end = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
-  return { start, end };
-}
-
-export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
-  const { start, end } = monthRange(month);
-
-  const { data, error } = await db()
-    .from("sale_margin")
-    .select("*")
-    .gte("sale_date", start)
-    .lt("sale_date", end)
-    .returns<SaleMarginRow[]>();
-  if (error) throw error;
+export async function fetchSkuMarginForRange(start: string, end: string) {
+  const rows = await fetchSaleMarginForRange(start, end);
 
   // Mesma exclusão aplicada na criação automática de custo (gift card,
   // pingente) — não são peça de roupa, não fazem sentido no ranking de
@@ -134,7 +118,7 @@ export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
   const excluded = [/gift\s*card/i, /pingente/i];
 
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     if (excluded.some((re) => re.test(row.piece_name))) continue;
     const entry = bySku.get(row.piece_name) ?? { sku: row.piece_name, units: 0, grossAmount: 0, netProfit: 0 };
     entry.units += row.quantity;
