@@ -14,7 +14,6 @@ import {
   fetchProductCosts,
   updateProductCost,
   updateProductName,
-  updateProductLine,
   deleteProductCost,
   insertProductCost,
   fetchSkuMarginForRange,
@@ -87,10 +86,8 @@ function ProductLinePanel({
   setNewProduct,
   onCostBlur,
   onNameBlur,
-  onMove,
   onDelete,
   onAdd,
-  moveLabel,
   showAddRow = true,
 }: {
   title: string;
@@ -99,10 +96,8 @@ function ProductLinePanel({
   setNewProduct: Dispatch<SetStateAction<Omit<ProductCostRow, "id">>>;
   onCostBlur: (id: string, field: keyof Omit<ProductCostRow, "id" | "sku" | "product_name" | "product_line">, value: string) => void;
   onNameBlur: (id: string, value: string) => void;
-  onMove: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
-  moveLabel: string;
   showAddRow?: boolean;
 }) {
   const costFields = ["tecido", "estampa", "costura", "outros_acabamentos"] as const;
@@ -129,7 +124,6 @@ function ProductLinePanel({
               <th className="num">Costura</th>
               <th className="num">Outros</th>
               <th className="num">Total</th>
-              <th style={{ width: 70 }}></th>
               <th style={{ width: 40 }}></th>
             </tr>
           </thead>
@@ -157,11 +151,6 @@ function ProductLinePanel({
                     </td>
                   ))}
                   <td className="num total-cell">{money(total)}</td>
-                  <td>
-                    <button type="button" className="btn btn-ghost" style={{ padding: "5px 8px", fontSize: 10 }} onClick={() => onMove(p.id)}>
-                      {moveLabel}
-                    </button>
-                  </td>
                   <td>
                     <div className="icon-cell" onClick={() => onDelete(p.id)}>✕</div>
                   </td>
@@ -192,7 +181,6 @@ function ProductLinePanel({
                   </td>
                 ))}
                 <td className="num total-cell">{money(newTotal)}</td>
-                <td></td>
                 <td>
                   <div className="icon-cell" onClick={onAdd}>+</div>
                 </td>
@@ -331,11 +319,6 @@ export function Admin() {
     if (!trimmed) return;
     setProductCosts((rows) => rows.map((r) => (r.id === id ? { ...r, product_name: trimmed } : r)));
     await updateProductName(id, trimmed);
-  }
-
-  async function handleLineChange(id: string, line: ProductCostRow["product_line"]) {
-    setProductCosts((rows) => rows.map((r) => (r.id === id ? { ...r, product_line: line } : r)));
-    await updateProductLine(id, line);
   }
 
   async function handleDeleteProduct(id: string) {
@@ -734,10 +717,8 @@ export function Admin() {
                 setNewProduct={setNewProductBasico}
                 onCostBlur={handleProductCostBlur}
                 onNameBlur={handleProductNameBlur}
-                onMove={(id) => handleLineChange(id, "exclusivo")}
                 onDelete={handleDeleteProduct}
                 onAdd={() => handleAddProduct(newProductBasico, () => setNewProductBasico(emptyProductCost("basico")))}
-                moveLabel="mover pra Exclusivo"
               />
               {exclusivoGroups.map(([collection, products]) => (
                 <ProductLinePanel
@@ -748,14 +729,12 @@ export function Admin() {
                   setNewProduct={setNewProductExclusivo}
                   onCostBlur={handleProductCostBlur}
                   onNameBlur={handleProductNameBlur}
-                  onMove={(id) => handleLineChange(id, "basico")}
                   onDelete={handleDeleteProduct}
                   onAdd={() =>
                     handleAddProduct({ ...newProductExclusivo, collection }, () =>
                       setNewProductExclusivo(emptyProductCost("exclusivo", collection)),
                     )
                   }
-                  moveLabel="mover pra Básico"
                   showAddRow
                 />
               ))}

@@ -217,14 +217,6 @@ export async function updateProductCost(
   if (error) throw error;
 }
 
-export async function updateProductLine(id: string, product_line: ProductLine) {
-  const { error } = await db()
-    .from("product_costs")
-    .update({ product_line, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw error;
-}
-
 export async function updateProductName(id: string, product_name: string) {
   const { error } = await db()
     .from("product_costs")
