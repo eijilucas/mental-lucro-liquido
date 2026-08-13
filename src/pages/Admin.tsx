@@ -16,13 +16,21 @@ import {
   updateProductLine,
   deleteProductCost,
   insertProductCost,
+  fetchSkuMarginForMonth,
   currentMonthStart,
   type OverheadRow,
   type FeeRatesRow,
   type ProductCostRow,
 } from "../lib/queries";
 
-type Tab = "sku" | "fees" | "overhead";
+type Tab = "sku" | "fees" | "overhead" | "profit";
+type PieceMargin = { sku: string; units: number; marginPct: number };
+
+function marginClass(pct: number) {
+  if (pct >= 40) return "good";
+  if (pct >= 15) return "mid";
+  return "low";
+}
 
 function money(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -189,6 +197,7 @@ export function Admin() {
   const [overhead, setOverhead] = useState<OverheadRow[]>([]);
   const [feeRates, setFeeRates] = useState<FeeRatesRow | null>(null);
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
+  const [pieceMargin, setPieceMargin] = useState<PieceMargin[]>([]);
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
@@ -201,11 +210,17 @@ export function Admin() {
     let cancelled = false;
     async function load() {
       try {
-        const [overheadRows, rates, costs] = await Promise.all([fetchMonthlyOverhead(), fetchFeeRates(), fetchProductCosts()]);
+        const [overheadRows, rates, costs, margin] = await Promise.all([
+          fetchMonthlyOverhead(),
+          fetchFeeRates(),
+          fetchProductCosts(),
+          fetchSkuMarginForMonth(),
+        ]);
         if (cancelled) return;
         setOverhead(overheadRows);
         setFeeRates(rates);
         setProductCosts(costs);
+        setPieceMargin(margin);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
       } finally {
@@ -343,13 +358,20 @@ export function Admin() {
           <div className="tabs">
             <div className={`tab ${tab === "sku" ? "active" : ""}`} onClick={() => setTab("sku")}>
               Custo de cada peça
-              <span className="count">{productCosts.length}</span>
+              <span className="count">
+                {productCosts.filter((p) => p.product_line === "basico").length +
+                  exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0)}
+              </span>
             </div>
             <div className={`tab ${tab === "fees" ? "active" : ""}`} onClick={() => setTab("fees")}>
               Taxas de venda
             </div>
             <div className={`tab ${tab === "overhead" ? "active" : ""}`} onClick={() => setTab("overhead")}>
               Gastos do mês
+              <span className="count">{monthLabel(currentMonthStart())}</span>
+            </div>
+            <div className={`tab ${tab === "profit" ? "active" : ""}`} onClick={() => setTab("profit")}>
+              Lucro por peça
               <span className="count">{monthLabel(currentMonthStart())}</span>
             </div>
           </div>
@@ -660,6 +682,46 @@ export function Admin() {
                 />
               ))}
             </>
+          )}
+
+          {tab === "profit" && (
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="panel-title">Lucro por peça — {monthLabel(currentMonthStart())}</div>
+                  <div className="panel-hint">Todas as peças vendidas no mês, ordenadas da maior pra menor margem.</div>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Peça</th>
+                      <th className="num">Unid.</th>
+                      <th className="num">Margem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pieceMargin.length === 0 && (
+                      <tr>
+                        <td colSpan={3} style={{ color: "var(--ink-faint)" }}>
+                          Nenhuma venda ainda esse mês.
+                        </td>
+                      </tr>
+                    )}
+                    {pieceMargin.map((row) => (
+                      <tr key={row.sku}>
+                        <td className="sku">{row.sku}</td>
+                        <td className="num">{row.units}</td>
+                        <td className="num">
+                          <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </>
       )}
