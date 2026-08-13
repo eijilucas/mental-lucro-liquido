@@ -5,10 +5,9 @@ import { useSession } from "../lib/useSession";
 
 export function Login() {
   const { session, loading: sessionLoading } = useSession();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<{ kind: "idle" | "error" | "ok"; message?: string }>({ kind: "idle" });
+  const [status, setStatus] = useState<{ kind: "idle" | "error"; message?: string }>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -20,17 +19,8 @@ export function Login() {
     setBusy(true);
     setStatus({ kind: "idle" });
 
-    if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setStatus({ kind: "error", message: "E-mail ou senha errados." });
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setStatus({ kind: "error", message: error.message });
-      } else {
-        setStatus({ kind: "ok", message: "Conta criada. Confirme o e-mail (se pedido) e entre normalmente." });
-      }
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setStatus({ kind: "error", message: "E-mail ou senha errados." });
     setBusy(false);
   }
 
@@ -48,10 +38,8 @@ export function Login() {
       <div className="panel">
         <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
           <div>
-            <div className="panel-title">{mode === "signin" ? "Entrar" : "Criar conta"}</div>
-            <div className="panel-hint">
-              {mode === "signin" ? "Acesso restrito ao admin." : "Só funciona pra e-mails já liberados no banco."}
-            </div>
+            <div className="panel-title">Entrar</div>
+            <div className="panel-hint">Acesso restrito ao admin. Contas são criadas pelo administrador.</div>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="panel-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -75,33 +63,18 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={{ textAlign: "left" }}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              autoComplete="current-password"
             />
           </div>
 
           {status.kind === "error" && (
             <div style={{ fontSize: 12, color: "var(--negative)" }}>{status.message}</div>
           )}
-          {status.kind === "ok" && (
-            <div style={{ fontSize: 12, color: "var(--positive)" }}>{status.message}</div>
-          )}
 
           <button className="btn btn-primary" type="submit" disabled={busy} style={{ marginTop: 4 }}>
-            {busy ? "..." : mode === "signin" ? "Entrar" : "Criar conta"}
+            {busy ? "..." : "Entrar"}
           </button>
         </form>
-        <div className="toolbar" style={{ justifyContent: "center" }}>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => {
-              setMode(mode === "signin" ? "signup" : "signin");
-              setStatus({ kind: "idle" });
-            }}
-          >
-            {mode === "signin" ? "Primeiro acesso? Criar conta" : "Já tenho conta"}
-          </button>
-        </div>
       </div>
     </div>
   );

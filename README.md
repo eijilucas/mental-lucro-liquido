@@ -34,18 +34,24 @@ Stack: Vite + React 19 + TypeScript + react-router-dom + @supabase/supabase-js
   gravam no Supabase na hora (sem botão de "salvar tudo", cada campo salva
   sozinho ao perder o foco). Não existe mais dado mockado no projeto.
 
-## Primeiro acesso
+## Criar acesso pra alguém
 
-1. Abrir `/login`, clicar em "Primeiro acesso? Criar conta".
-2. Usar um e-mail que já esteja em `admin_emails` (`vitor@m3ntalmadness.com`
-   ou `lucas@hinfros.com.br`) e escolher uma senha (mínimo 6 caracteres) — a
-   conta é criada e o login já libera na hora, sem confirmação por e-mail.
-3. Nas próximas vezes, é só "Entrar" com esse e-mail e senha.
+Não tem mais cadastro aberto na tela de login (self-signup foi desligado de
+propósito — só o admin cria conta, não é qualquer um com e-mail liberado
+que pode se cadastrar sozinho). Pra dar acesso a alguém:
+
+1. No painel do Supabase: **Authentication → Users → Add user**, criar o
+   usuário com e-mail e senha.
+2. Inserir esse mesmo e-mail na tabela `admin_emails` (via SQL Editor, ou
+   `npx supabase db query --linked --file <arquivo.sql>` com
+   `insert into admin_emails (email) values ('...');`; não existe tela pra
+   isso ainda).
+3. A pessoa entra em `/login` com e-mail e senha normalmente.
 
 Estar logado não basta pra ver custo/margem — o e-mail precisa estar na
-tabela `admin_emails`. Pra liberar outra pessoa, inserir o e-mail dela lá
-(via SQL Editor do Supabase, ou `npx supabase db query --linked "insert into admin_emails (email) values ('...')"`;
-não existe tela pra isso ainda).
+tabela `admin_emails` **e** o cadastro precisa ter sido feito pelo painel
+do Supabase (Authentication → Sign In / Providers → Email → "Allow new
+users to sign up" está desligado).
 
 ## Rodar localmente
 
