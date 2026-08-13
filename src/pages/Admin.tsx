@@ -44,7 +44,7 @@ function monthLabel(monthStr: string) {
   return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 }
 
-function emptyProductCost(product_line: ProductCostRow["product_line"]): Omit<ProductCostRow, "id"> {
+function emptyProductCost(product_line: ProductCostRow["product_line"], collection: string | null = null): Omit<ProductCostRow, "id"> {
   return {
     sku: null,
     product_name: "",
@@ -55,6 +55,8 @@ function emptyProductCost(product_line: ProductCostRow["product_line"]): Omit<Pr
     adesivo: 0,
     outros_acabamentos: 0,
     product_line,
+    collection,
+    collection_published_at: null,
   };
 }
 
@@ -69,6 +71,7 @@ function ProductLinePanel({
   onDelete,
   onAdd,
   moveLabel,
+  showAddRow = true,
 }: {
   title: string;
   products: ProductCostRow[];
@@ -80,6 +83,7 @@ function ProductLinePanel({
   onDelete: (id: string) => void;
   onAdd: () => void;
   moveLabel: string;
+  showAddRow?: boolean;
 }) {
   const costFields = ["tecido", "estampa", "costura", "sacolinha", "adesivo", "outros_acabamentos"] as const;
   const newTotal = costFields.reduce((sum, f) => sum + newProduct[f], 0);
@@ -143,34 +147,36 @@ function ProductLinePanel({
                 </tr>
               );
             })}
-            <tr>
-              <td className="sku">
-                <input
-                  className="cell-text"
-                  placeholder="nome da peça"
-                  style={{ width: 220 }}
-                  value={newProduct.product_name}
-                  onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
-                />
-              </td>
-              {costFields.map((field) => (
-                <td className="num" key={field}>
+            {showAddRow && (
+              <tr>
+                <td className="sku">
                   <input
-                    className="cell-input"
-                    value={money(newProduct[field])}
-                    onChange={(e) => {
-                      const v = parseMoney(e.target.value);
-                      if (v !== null) setNewProduct((s) => ({ ...s, [field]: v }));
-                    }}
+                    className="cell-text"
+                    placeholder="nome da peça"
+                    style={{ width: 220 }}
+                    value={newProduct.product_name}
+                    onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
                   />
                 </td>
-              ))}
-              <td className="num total-cell">{money(newTotal)}</td>
-              <td></td>
-              <td>
-                <div className="icon-cell" onClick={onAdd}>+</div>
-              </td>
-            </tr>
+                {costFields.map((field) => (
+                  <td className="num" key={field}>
+                    <input
+                      className="cell-input"
+                      value={money(newProduct[field])}
+                      onChange={(e) => {
+                        const v = parseMoney(e.target.value);
+                        if (v !== null) setNewProduct((s) => ({ ...s, [field]: v }));
+                      }}
+                    />
+                  </td>
+                ))}
+                <td className="num total-cell">{money(newTotal)}</td>
+                <td></td>
+                <td>
+                  <div className="icon-cell" onClick={onAdd}>+</div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -291,6 +297,28 @@ export function Admin() {
 
   const marketingPool = overhead.filter((r) => r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
   const fixedPool = overhead.filter((r) => !r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
+
+  // Só mostra o painel da coleção MAIS RECENTE (o drop atual — identificado
+  // pelo published_at mais novo, sem precisar hardcodar o nome) mais o
+  // painel "Sem coleção" (onde entram peças manuais e as poucas sem
+  // coleção na Shopify). Drops antigos ficam escondidos, mas continuam no
+  // banco — só não poluem mais a tela.
+  const exclusivoAll = productCosts.filter((p) => p.product_line === "exclusivo");
+  const currentCollection = exclusivoAll
+    .filter((p) => p.collection && p.collection_published_at)
+    .reduce<{ collection: string; publishedAt: string } | null>((latest, p) => {
+      if (!latest || p.collection_published_at! > latest.publishedAt) {
+        return { collection: p.collection!, publishedAt: p.collection_published_at! };
+      }
+      return latest;
+    }, null);
+
+  const exclusivoGroups: [string | null, ProductCostRow[]][] = [
+    ...(currentCollection
+      ? ([[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]] as [string | null, ProductCostRow[]][])
+      : []),
+    [null, exclusivoAll.filter((p) => p.collection === null)],
+  ];
 
   if (!supabase) {
     return (
@@ -615,18 +643,22 @@ export function Admin() {
                 onAdd={() => handleAddProduct(newProductBasico, () => setNewProductBasico(emptyProductCost("basico")))}
                 moveLabel="mover pra Exclusivo"
               />
-              <ProductLinePanel
-                title="Custo de cada peça — Exclusivos"
-                products={productCosts.filter((p) => p.product_line === "exclusivo")}
-                newProduct={newProductExclusivo}
-                setNewProduct={setNewProductExclusivo}
-                onCostBlur={handleProductCostBlur}
-                onNameBlur={handleProductNameBlur}
-                onMove={(id) => handleLineChange(id, "basico")}
-                onDelete={handleDeleteProduct}
-                onAdd={() => handleAddProduct(newProductExclusivo, () => setNewProductExclusivo(emptyProductCost("exclusivo")))}
-                moveLabel="mover pra Básico"
-              />
+              {exclusivoGroups.map(([collection, products]) => (
+                <ProductLinePanel
+                  key={collection ?? "sem-colecao"}
+                  title={`Custo de cada peça — Exclusivos — ${collection ?? "Sem coleção"}`}
+                  products={products}
+                  newProduct={newProductExclusivo}
+                  setNewProduct={setNewProductExclusivo}
+                  onCostBlur={handleProductCostBlur}
+                  onNameBlur={handleProductNameBlur}
+                  onMove={(id) => handleLineChange(id, "basico")}
+                  onDelete={handleDeleteProduct}
+                  onAdd={() => handleAddProduct(newProductExclusivo, () => setNewProductExclusivo(emptyProductCost("exclusivo")))}
+                  moveLabel="mover pra Básico"
+                  showAddRow={collection === null}
+                />
+              ))}
             </>
           )}
         </>

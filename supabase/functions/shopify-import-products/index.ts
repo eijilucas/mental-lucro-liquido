@@ -87,12 +87,19 @@ interface ProductCostStub {
   sku: string | null;
   product_name: string;
   product_line: ProductLine;
+  collection: string | null;
+  collection_published_at: string | null;
   tecido: number;
   estampa: number;
   costura: number;
   sacolinha: number;
   adesivo: number;
   outros_acabamentos: number;
+}
+
+interface CollectionInfo {
+  title: string;
+  publishedAt: string | null;
 }
 
 function extractNextUrl(linkHeader: string | null): string | null {
@@ -136,6 +143,52 @@ async function fetchCollectionId(profile: StoreProfile, accessToken: string): Pr
   return collection.id as number;
 }
 
+// Só usada pra loja dos Exclusivos (sem collectionHandle fixo): busca
+// todas as coleções da loja e todo mapeamento produto<->coleção, pra
+// marcar cada peça importada com a coleção que ela pertence (Creature
+// Within, Crimson Veil, etc.) — puramente informativo, só pra separar a
+// tela do admin, não entra no cálculo de margem.
+async function fetchCollectionTitles(profile: StoreProfile, accessToken: string): Promise<Map<number, CollectionInfo>> {
+  const collections = new Map<number, CollectionInfo>();
+  let url: string | null =
+    `https://${profile.domain}/admin/api/${SHOPIFY_API_VERSION}/custom_collections.json?limit=250&fields=id,title,handle,published_at`;
+
+  while (url) {
+    const res = await fetch(url, { headers: { "X-Shopify-Access-Token": accessToken } });
+    if (!res.ok) throw new Error(`Shopify (${profile.domain}) respondeu ${res.status} ao listar coleções`);
+    const data = await res.json();
+    for (const c of data.custom_collections ?? []) {
+      // Ignora coleções chamadas "Basic MM Drop" dentro da loja dos
+      // Exclusivos — parece ter sido criada por engano, mesmo nome da
+      // coleção da outra loja, não faz sentido como rótulo aqui.
+      if (!c.handle?.startsWith("basic-mm-drop")) collections.set(c.id, { title: c.title, publishedAt: c.published_at ?? null });
+    }
+    url = extractNextUrl(res.headers.get("Link"));
+  }
+
+  return collections;
+}
+
+async function fetchProductCollectionMap(profile: StoreProfile, accessToken: string): Promise<Map<number, CollectionInfo>> {
+  const collections = await fetchCollectionTitles(profile, accessToken);
+  const productToCollection = new Map<number, CollectionInfo>();
+
+  let url: string | null = `https://${profile.domain}/admin/api/${SHOPIFY_API_VERSION}/collects.json?limit=250`;
+  while (url) {
+    const res = await fetch(url, { headers: { "X-Shopify-Access-Token": accessToken } });
+    if (!res.ok) throw new Error(`Shopify (${profile.domain}) respondeu ${res.status} ao listar collects`);
+    const data = await res.json();
+    for (const collect of data.collects ?? []) {
+      if (productToCollection.has(collect.product_id)) continue; // já achou uma coleção pra esse produto
+      const info = collections.get(collect.collection_id);
+      if (info) productToCollection.set(collect.product_id, info);
+    }
+    url = extractNextUrl(res.headers.get("Link"));
+  }
+
+  return productToCollection;
+}
+
 async function fetchAllProducts(profile: StoreProfile, accessToken: string, collectionId?: number): Promise<ShopifyProduct[]> {
   const products: ShopifyProduct[] = [];
   const collectionFilter = collectionId ? `&collection_id=${collectionId}` : "";
@@ -162,20 +215,31 @@ async function importFromProfile(profile: StoreProfile): Promise<ProductCostStub
   const collectionId = profile.collectionHandle ? await fetchCollectionId(profile, accessToken) : undefined;
   const products = await fetchAllProducts(profile, accessToken, collectionId);
 
+  // Só busca o mapa produto->coleção quando a loja não tem um filtro de
+  // coleção fixo (hoje é só a dos Exclusivos) — é pra isso que serve.
+  const productCollection = profile.collectionHandle
+    ? new Map<number, CollectionInfo>()
+    : await fetchProductCollectionMap(profile, accessToken);
+
   // Uma linha por PEÇA, não por variante — pega o SKU da primeira
   // variante que tiver um preenchido (se nenhuma tiver, fica null).
-  return products.map((product) => ({
-    shopify_product_id: product.id,
-    sku: product.variants?.find((v) => v.sku)?.sku ?? null,
-    product_name: product.title,
-    product_line: profile.productLine,
-    tecido: 0,
-    estampa: 0,
-    costura: 0,
-    sacolinha: 0,
-    adesivo: 0,
-    outros_acabamentos: 0,
-  }));
+  return products.map((product) => {
+    const info = productCollection.get(product.id);
+    return {
+      shopify_product_id: product.id,
+      sku: product.variants?.find((v) => v.sku)?.sku ?? null,
+      product_name: product.title,
+      product_line: profile.productLine,
+      collection: info?.title ?? null,
+      collection_published_at: info?.publishedAt ?? null,
+      tecido: 0,
+      estampa: 0,
+      costura: 0,
+      sacolinha: 0,
+      adesivo: 0,
+      outros_acabamentos: 0,
+    };
+  });
 }
 
 async function importProducts(supabase: SupabaseClient): Promise<Record<string, number>> {

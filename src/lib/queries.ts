@@ -56,6 +56,8 @@ export interface ProductCostRow {
   adesivo: number;
   outros_acabamentos: number;
   product_line: ProductLine;
+  collection: string | null;
+  collection_published_at: string | null;
 }
 
 export function currentMonthStart(): string {
@@ -206,7 +208,7 @@ export async function updateFeeRates(rates: Omit<FeeRatesRow, "id">) {
 export async function fetchProductCosts() {
   const { data, error } = await db()
     .from("product_costs")
-    .select("id, sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line")
+    .select("id, sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line, collection, collection_published_at")
     .order("product_name")
     .returns<ProductCostRow[]>();
   if (error) throw error;
