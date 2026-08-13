@@ -222,13 +222,20 @@ async function importOrdersFromProfile(supabase: SupabaseClient, profile: StoreP
   return rows.length;
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Método não permitido", { status: 405 });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!ADMIN_IMPORT_SECRET || authHeader !== `Bearer ${ADMIN_IMPORT_SECRET}`) {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!ADMIN_IMPORT_SECRET || !timingSafeEqual(authHeader, `Bearer ${ADMIN_IMPORT_SECRET}`)) {
     return new Response("Não autorizado", { status: 401 });
   }
 
