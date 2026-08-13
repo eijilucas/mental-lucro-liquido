@@ -299,10 +299,9 @@ export function Admin() {
   const fixedPool = overhead.filter((r) => !r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
 
   // Só mostra o painel da coleção MAIS RECENTE (o drop atual — identificado
-  // pelo published_at mais novo, sem precisar hardcodar o nome) mais o
-  // painel "Sem coleção" (onde entram peças manuais e as poucas sem
-  // coleção na Shopify). Drops antigos ficam escondidos, mas continuam no
-  // banco — só não poluem mais a tela.
+  // pelo published_at mais novo, sem precisar hardcodar o nome). Drops
+  // antigos e peças sem coleção ficam escondidos, mas continuam no banco —
+  // só não poluem mais a tela.
   const exclusivoAll = productCosts.filter((p) => p.product_line === "exclusivo");
   const currentCollection = exclusivoAll
     .filter((p) => p.collection && p.collection_published_at)
@@ -313,12 +312,9 @@ export function Admin() {
       return latest;
     }, null);
 
-  const exclusivoGroups: [string | null, ProductCostRow[]][] = [
-    ...(currentCollection
-      ? ([[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]] as [string | null, ProductCostRow[]][])
-      : []),
-    [null, exclusivoAll.filter((p) => p.collection === null)],
-  ];
+  const exclusivoGroups: [string | null, ProductCostRow[]][] = currentCollection
+    ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
+    : [[null, exclusivoAll.filter((p) => p.collection === null)]];
 
   if (!supabase) {
     return (
@@ -654,9 +650,13 @@ export function Admin() {
                   onNameBlur={handleProductNameBlur}
                   onMove={(id) => handleLineChange(id, "basico")}
                   onDelete={handleDeleteProduct}
-                  onAdd={() => handleAddProduct(newProductExclusivo, () => setNewProductExclusivo(emptyProductCost("exclusivo")))}
+                  onAdd={() =>
+                    handleAddProduct({ ...newProductExclusivo, collection }, () =>
+                      setNewProductExclusivo(emptyProductCost("exclusivo", collection)),
+                    )
+                  }
                   moveLabel="mover pra Básico"
-                  showAddRow={collection === null}
+                  showAddRow
                 />
               ))}
             </>
