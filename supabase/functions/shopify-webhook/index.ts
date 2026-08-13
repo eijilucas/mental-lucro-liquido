@@ -130,6 +130,11 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   );
 }
 
+// Produtos que nunca são peça de roupa de verdade (gift card, pingente)
+// — a venda continua sendo registrada normalmente, só não ganham uma
+// linha de custo automática.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+
 // Cria a linha da peça em `product_costs` na primeira venda que aparecer
 // com aquele product_id — custo tudo zerado, só o nome certo (veio
 // direto da Shopify, sem o tamanho/variante) e a linha certa (básico ou
@@ -140,7 +145,8 @@ async function ensureProductCostStubs(
   saleRows: { shopify_product_id: number; product_sku: string | null; product_name: string }[],
   productLine: ProductLine,
 ) {
-  const uniqueByProduct = new Map(saleRows.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
+  const eligible = saleRows.filter((r) => !EXCLUDED_NAME_PATTERNS.some((re) => re.test(r.product_name)));
+  const uniqueByProduct = new Map(eligible.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
   const stubs = Array.from(uniqueByProduct, ([shopify_product_id, { sku, product_name }]) => ({
     shopify_product_id,
     sku,

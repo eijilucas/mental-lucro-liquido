@@ -66,10 +66,31 @@ export function currentMonthStart(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-function previousMonthStart(): string {
+export function todayStr(): string {
   const now = new Date();
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// Um dia depois de `dateStr` — usado como limite superior EXCLUSIVO nas
+// queries, pra "até 07/08" incluir o dia 7 inteiro (sale_date é
+// timestamptz, então "< 07/08" cortaria as vendas do próprio dia 7).
+function dayAfter(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d + 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// Período anterior de mesma duração, terminando um dia antes de `start`
+// — usado pra comparar "essa semana" com "a semana anterior", etc.
+export function previousPeriod(start: string, end: string): { start: string; end: string } {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  const days = Math.round((endDate.getTime() - startDate.getTime()) / msPerDay) + 1;
+  const prevEnd = new Date(startDate.getTime() - msPerDay);
+  const prevStart = new Date(prevEnd.getTime() - (days - 1) * msPerDay);
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { start: fmt(prevStart), end: fmt(prevEnd) };
 }
 
 function db() {
@@ -77,14 +98,15 @@ function db() {
   return supabase;
 }
 
-export async function fetchMonthlyDre(month = currentMonthStart()) {
-  const { data, error } = await db().from("monthly_dre").select("*").eq("month", month).maybeSingle<MonthlyDreRow>();
+export async function fetchSaleMarginForRange(start: string, end: string) {
+  const { data, error } = await db()
+    .from("sale_margin")
+    .select("*")
+    .gte("sale_date", start)
+    .lt("sale_date", dayAfter(end))
+    .returns<SaleMarginRow[]>();
   if (error) throw error;
-  return data;
-}
-
-export async function fetchPreviousMonthDre() {
-  return fetchMonthlyDre(previousMonthStart());
+  return data ?? [];
 }
 
 function monthRange(month: string) {
@@ -93,18 +115,6 @@ function monthRange(month: string) {
   const nextMonth = new Date(y, m, 1);
   const end = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
   return { start, end };
-}
-
-export async function fetchSaleMarginForMonth(month = currentMonthStart()) {
-  const { start, end } = monthRange(month);
-  const { data, error } = await db()
-    .from("sale_margin")
-    .select("*")
-    .gte("sale_date", start)
-    .lt("sale_date", end)
-    .returns<SaleMarginRow[]>();
-  if (error) throw error;
-  return data ?? [];
 }
 
 export async function fetchSkuMarginForMonth(month = currentMonthStart()) {

@@ -208,10 +208,17 @@ async function fetchAllProducts(profile: StoreProfile, accessToken: string, coll
   return products;
 }
 
+// Produtos que nunca são peça de roupa de verdade (não faz sentido
+// rastrear custo de produção deles) — ficam de fora da importação pra
+// sempre, mesmo que a Shopify tenha um novo desse tipo no futuro.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+
 async function importFromProfile(profile: StoreProfile): Promise<ProductCostStub[]> {
   const accessToken = await fetchAccessToken(profile);
   const collectionId = profile.collectionHandle ? await fetchCollectionId(profile, accessToken) : undefined;
-  const products = await fetchAllProducts(profile, accessToken, collectionId);
+  const products = (await fetchAllProducts(profile, accessToken, collectionId)).filter(
+    (product) => !EXCLUDED_NAME_PATTERNS.some((re) => re.test(product.title)),
+  );
 
   // Só busca o mapa produto->coleção quando a loja não tem um filtro de
   // coleção fixo (hoje é só a dos Exclusivos) — é pra isso que serve.

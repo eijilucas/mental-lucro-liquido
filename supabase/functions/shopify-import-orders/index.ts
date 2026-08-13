@@ -170,12 +170,18 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
     .filter((row) => row.quantity > 0);
 }
 
+// Produtos que nunca são peça de roupa de verdade (gift card, pingente)
+// — a venda continua sendo registrada normalmente, só não ganham uma
+// linha de custo automática.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+
 async function ensureProductCostStubs(
   supabase: SupabaseClient,
   saleRows: { shopify_product_id: number; product_sku: string | null; product_name: string }[],
   productLine: ProductLine,
 ) {
-  const uniqueByProduct = new Map(saleRows.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
+  const eligible = saleRows.filter((r) => !EXCLUDED_NAME_PATTERNS.some((re) => re.test(r.product_name)));
+  const uniqueByProduct = new Map(eligible.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
   const stubs = Array.from(uniqueByProduct, ([shopify_product_id, { sku, product_name }]) => ({
     shopify_product_id,
     sku,
