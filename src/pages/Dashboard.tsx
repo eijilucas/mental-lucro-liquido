@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TopBar, AdminLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
+import { DateRangePicker } from "../components/DateRangePicker";
 import {
   fetchSaleMarginForRange,
   fetchLastSyncTime,
@@ -208,27 +209,17 @@ export function Dashboard() {
         </div>
       </TopBar>
 
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
         <div>
           <h1 className="page-title">Visão geral — {rangeLabel(rangeStart, rangeEnd)}</h1>
           {lastSync && <p className="page-sub">última sincronização {timeAgo(lastSync)}</p>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            type="date"
-            className="cell-text"
-            value={rangeStart}
-            max={rangeEnd}
-            onChange={(e) => setRangeStart(e.target.value)}
-          />
-          <span className="page-sub" style={{ margin: 0 }}>até</span>
-          <input
-            type="date"
-            className="cell-text"
-            value={rangeEnd}
-            min={rangeStart}
-            max={todayStr()}
-            onChange={(e) => setRangeEnd(e.target.value)}
+          <DateRangePicker
+            start={rangeStart}
+            end={rangeEnd}
+            maxDate={todayStr()}
+            onChange={(s, e) => { setRangeStart(s); setRangeEnd(e); }}
           />
           <button type="button" className="btn btn-ghost" onClick={() => { setRangeStart(currentMonthStart()); setRangeEnd(todayStr()); }}>
             Mês atual

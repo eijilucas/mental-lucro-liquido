@@ -198,6 +198,7 @@ export function Admin() {
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
   const [pieceMargin, setPieceMargin] = useState<PieceMargin[]>([]);
   const [pieceSearch, setPieceSearch] = useState("");
+  const [pieceSort, setPieceSort] = useState<{ field: keyof PieceMargin; dir: "asc" | "desc" }>({ field: "marginPct", dir: "desc" });
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
@@ -310,6 +311,10 @@ export function Admin() {
   async function handleDeleteProduct(id: string) {
     setProductCosts((rows) => rows.filter((r) => r.id !== id));
     await deleteProductCost(id);
+  }
+
+  function handlePieceSort(field: keyof PieceMargin) {
+    setPieceSort((s) => (s.field === field ? { field, dir: s.dir === "asc" ? "desc" : "asc" } : { field, dir: field === "sku" ? "asc" : "desc" }));
   }
 
   const marketingPool = overhead.filter((r) => r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
@@ -713,7 +718,7 @@ export function Admin() {
               <div className="panel-head">
                 <div>
                   <div className="panel-title">Lucro por peça — {monthLabel(currentMonthStart())}</div>
-                  <div className="panel-hint">Todas as peças vendidas no mês, ordenadas da maior pra menor margem.</div>
+                  <div className="panel-hint">Todas as peças vendidas no mês — clique no cabeçalho pra ordenar.</div>
                 </div>
                 <input
                   className="cell-text"
@@ -727,16 +732,27 @@ export function Admin() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Peça</th>
-                      <th className="num">Unid.</th>
-                      <th className="num">Margem</th>
+                      <th className="sortable" onClick={() => handlePieceSort("sku")}>
+                        Peça{pieceSort.field === "sku" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
+                      </th>
+                      <th className="num sortable" onClick={() => handlePieceSort("units")}>
+                        Unid.{pieceSort.field === "units" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
+                      </th>
+                      <th className="num sortable" onClick={() => handlePieceSort("marginPct")}>
+                        Margem{pieceSort.field === "marginPct" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {(() => {
-                      const filtered = pieceMargin.filter((row) =>
-                        row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase()),
-                      );
+                      const filtered = pieceMargin
+                        .filter((row) => row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase()))
+                        .sort((a, b) => {
+                          const dir = pieceSort.dir === "asc" ? 1 : -1;
+                          const field = pieceSort.field;
+                          if (field === "sku") return a.sku.localeCompare(b.sku) * dir;
+                          return (a[field] - b[field]) * dir;
+                        });
                       if (filtered.length === 0) {
                         return (
                           <tr>

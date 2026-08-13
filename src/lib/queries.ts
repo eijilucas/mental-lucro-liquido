@@ -128,8 +128,14 @@ export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
     .returns<SaleMarginRow[]>();
   if (error) throw error;
 
+  // Mesma exclusão aplicada na criação automática de custo (gift card,
+  // pingente) — não são peça de roupa, não fazem sentido no ranking de
+  // margem por peça, mesmo que a venda em si continue registrada.
+  const excluded = [/gift\s*card/i, /pingente/i];
+
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
   for (const row of data ?? []) {
+    if (excluded.some((re) => re.test(row.piece_name))) continue;
     const entry = bySku.get(row.piece_name) ?? { sku: row.piece_name, units: 0, grossAmount: 0, netProfit: 0 };
     entry.units += row.quantity;
     entry.grossAmount += row.gross_amount;
