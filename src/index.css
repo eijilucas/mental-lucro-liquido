@@ -119,7 +119,7 @@ h1.page-title {
 .page-sub b { color: var(--ink); font-weight: 600; }
 
 /* ---- Tabs (admin) ---- */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-strong); margin-bottom: 28px; overflow-x: auto; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-strong); margin-bottom: 28px; overflow-x: auto; overflow-y: hidden; }
 .tab {
   font-family: var(--font-body);
   font-size: 12px;
