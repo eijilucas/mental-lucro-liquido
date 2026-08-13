@@ -15,6 +15,7 @@ export interface SaleMarginRow {
   net_profit: number;
   sale_date: string;
   product_line: ProductLine;
+  piece_name: string;
 }
 
 export interface MonthlyDreRow {
@@ -130,11 +131,11 @@ export async function fetchSkuMarginForMonth(month = currentMonthStart()) {
 
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
   for (const row of data ?? []) {
-    const entry = bySku.get(row.product_name) ?? { sku: row.product_name, units: 0, grossAmount: 0, netProfit: 0 };
+    const entry = bySku.get(row.piece_name) ?? { sku: row.piece_name, units: 0, grossAmount: 0, netProfit: 0 };
     entry.units += row.quantity;
     entry.grossAmount += row.gross_amount;
     entry.netProfit += row.net_profit;
-    bySku.set(row.product_name, entry);
+    bySku.set(row.piece_name, entry);
   }
   return Array.from(bySku.values())
     .map((r) => ({ sku: r.sku, units: r.units, marginPct: r.grossAmount > 0 ? (r.netProfit / r.grossAmount) * 100 : 0 }))

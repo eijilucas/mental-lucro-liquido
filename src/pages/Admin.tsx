@@ -198,6 +198,7 @@ export function Admin() {
   const [feeRates, setFeeRates] = useState<FeeRatesRow | null>(null);
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
   const [pieceMargin, setPieceMargin] = useState<PieceMargin[]>([]);
+  const [pieceSearch, setPieceSearch] = useState("");
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
@@ -691,6 +692,13 @@ export function Admin() {
                   <div className="panel-title">Lucro por peça — {monthLabel(currentMonthStart())}</div>
                   <div className="panel-hint">Todas as peças vendidas no mês, ordenadas da maior pra menor margem.</div>
                 </div>
+                <input
+                  className="cell-text"
+                  placeholder="buscar peça..."
+                  value={pieceSearch}
+                  onChange={(e) => setPieceSearch(e.target.value)}
+                  style={{ width: 200 }}
+                />
               </div>
               <div className="table-wrap">
                 <table>
@@ -702,22 +710,29 @@ export function Admin() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pieceMargin.length === 0 && (
-                      <tr>
-                        <td colSpan={3} style={{ color: "var(--ink-faint)" }}>
-                          Nenhuma venda ainda esse mês.
-                        </td>
-                      </tr>
-                    )}
-                    {pieceMargin.map((row) => (
-                      <tr key={row.sku}>
-                        <td className="sku">{row.sku}</td>
-                        <td className="num">{row.units}</td>
-                        <td className="num">
-                          <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      const filtered = pieceMargin.filter((row) =>
+                        row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase()),
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={3} style={{ color: "var(--ink-faint)" }}>
+                              {pieceMargin.length === 0 ? "Nenhuma venda ainda esse mês." : "Nenhuma peça encontrada."}
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return filtered.map((row) => (
+                        <tr key={row.sku}>
+                          <td className="sku">{row.sku}</td>
+                          <td className="num">{row.units}</td>
+                          <td className="num">
+                            <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
               </div>
