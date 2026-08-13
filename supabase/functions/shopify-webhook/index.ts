@@ -149,8 +149,6 @@ async function ensureProductCostStubs(
     tecido: 0,
     estampa: 0,
     costura: 0,
-    sacolinha: 0,
-    adesivo: 0,
     outros_acabamentos: 0,
   }));
 

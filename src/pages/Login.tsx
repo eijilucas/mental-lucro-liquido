@@ -42,7 +42,7 @@ export function Login() {
         <img src="/logo-m.png" alt="Mental Madness" className="brand-logo" />
         <span className="brand-mark">Mental Madness</span>
         <span className="brand-sep">/</span>
-        <span className="brand-app">lucro líquido</span>
+        <span className="brand-app">jackpot</span>
       </div>
 
       <div className="panel">

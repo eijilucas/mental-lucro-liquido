@@ -59,8 +59,6 @@ function emptyProductCost(product_line: ProductCostRow["product_line"], collecti
     tecido: 0,
     estampa: 0,
     costura: 0,
-    sacolinha: 0,
-    adesivo: 0,
     outros_acabamentos: 0,
     product_line,
     collection,
@@ -93,7 +91,7 @@ function ProductLinePanel({
   moveLabel: string;
   showAddRow?: boolean;
 }) {
-  const costFields = ["tecido", "estampa", "costura", "sacolinha", "adesivo", "outros_acabamentos"] as const;
+  const costFields = ["tecido", "estampa", "costura", "outros_acabamentos"] as const;
   const newTotal = costFields.reduce((sum, f) => sum + newProduct[f], 0);
 
   return (
@@ -101,7 +99,10 @@ function ProductLinePanel({
       <div className="panel-head">
         <div>
           <div className="panel-title">{title}</div>
-          <div className="panel-hint">A soma das colunas é o quanto custa produzir a peça — é isso que sai da venda antes de qualquer outra coisa.</div>
+          <div className="panel-hint">
+            A soma das colunas é o quanto custa produzir a peça — é isso que sai da venda antes de qualquer outra coisa.
+            Sacolinha e adesivo custam o mesmo pra toda peça, então ficaram na aba "Taxas de venda".
+          </div>
         </div>
       </div>
       <div className="table-wrap">
@@ -112,8 +113,6 @@ function ProductLinePanel({
               <th className="num">Tecido</th>
               <th className="num">Estampa</th>
               <th className="num">Costura</th>
-              <th className="num">Sacolinha</th>
-              <th className="num">Adesivo</th>
               <th className="num">Outros</th>
               <th className="num">Total</th>
               <th style={{ width: 70 }}></th>
@@ -122,7 +121,7 @@ function ProductLinePanel({
           </thead>
           <tbody>
             {products.map((p) => {
-              const total = p.tecido + p.estampa + p.costura + p.sacolinha + p.adesivo + p.outros_acabamentos;
+              const total = p.tecido + p.estampa + p.costura + p.outros_acabamentos;
               return (
                 <tr key={p.id}>
                   <td className="sku">
@@ -160,7 +159,7 @@ function ProductLinePanel({
                 <td className="sku">
                   <input
                     className="cell-text"
-                    placeholder="nome da peça"
+                    placeholder="Nome da peça"
                     style={{ width: 220 }}
                     value={newProduct.product_name}
                     onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
@@ -275,6 +274,8 @@ export function Admin() {
       imposto_pct: feeRates.imposto_pct,
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
       desconto_medio_pct: feeRates.desconto_medio_pct,
+      sacolinha: feeRates.sacolinha,
+      adesivo: feeRates.adesivo,
     });
     setFeeSaved(true);
     setTimeout(() => setFeeSaved(false), 2500);
@@ -342,7 +343,7 @@ export function Admin() {
 
   return (
     <div className="app">
-      <TopBar subtitle="lucro líquido · admin">
+      <TopBar subtitle="jackpot · admin">
         <div className="topbar-controls">
           <AdminBackLink />
           <SignOutButton />
@@ -449,7 +450,7 @@ export function Admin() {
                         <td>
                           <input
                             className="cell-text"
-                            placeholder="nome do novo gasto de marketing..."
+                            placeholder="Nome do novo gasto de marketing..."
                             style={{ width: 220 }}
                             value={newMarketing.category}
                             onChange={(e) => setNewMarketing((s) => ({ ...s, category: e.target.value }))}
@@ -546,7 +547,7 @@ export function Admin() {
                         <td>
                           <input
                             className="cell-text"
-                            placeholder="nome do novo gasto fixo..."
+                            placeholder="Nome do novo gasto fixo..."
                             style={{ width: 220 }}
                             value={newFixed.category}
                             onChange={(e) => setNewFixed((s) => ({ ...s, category: e.target.value }))}
@@ -644,6 +645,28 @@ export function Admin() {
                   />
                   <div className="suffix">mesma taxa do painel de comissão</div>
                 </div>
+                <div className="field">
+                  <label>Sacolinha</label>
+                  <input
+                    defaultValue={money(feeRates.sacolinha)}
+                    onBlur={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, sacolinha: v });
+                    }}
+                  />
+                  <div className="suffix">custo fixo por peça, igual pra todas</div>
+                </div>
+                <div className="field">
+                  <label>Adesivo</label>
+                  <input
+                    defaultValue={money(feeRates.adesivo)}
+                    onBlur={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, adesivo: v });
+                    }}
+                  />
+                  <div className="suffix">custo fixo por peça, igual pra todas</div>
+                </div>
               </div>
             </div>
           )}
@@ -694,7 +717,7 @@ export function Admin() {
                 </div>
                 <input
                   className="cell-text"
-                  placeholder="buscar peça..."
+                  placeholder="Buscar peça..."
                   value={pieceSearch}
                   onChange={(e) => setPieceSearch(e.target.value)}
                   style={{ width: 200 }}

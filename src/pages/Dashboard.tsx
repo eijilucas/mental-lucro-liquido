@@ -4,8 +4,6 @@ import { SignOutButton } from "../components/RequireAuth";
 import {
   fetchMonthlyDre,
   fetchPreviousMonthDre,
-  fetchRecentSales,
-  fetchSkuMarginForMonth,
   fetchSaleMarginForMonth,
   fetchLastSyncTime,
   currentMonthStart,
@@ -19,11 +17,6 @@ function money(v: number) {
 }
 function moneyCents(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function marginClass(pct: number) {
-  if (pct >= 32) return "good";
-  if (pct >= 24) return "mid";
-  return "low";
 }
 function monthLabel(monthStr: string) {
   const [y, m] = monthStr.split("-").map(Number);
@@ -122,8 +115,6 @@ function DreWaterfall({ title, hint, dre }: { title: string; hint: string; dre: 
 interface DashboardData {
   dre: MonthlyDreRow;
   prevDre: MonthlyDreRow | null;
-  recentSales: SaleMarginRow[];
-  skuMargin: { sku: string; units: number; marginPct: number }[];
   basicoDre: DreTotals;
   exclusivoDre: DreTotals;
   lastSync: string | null;
@@ -137,11 +128,9 @@ export function Dashboard() {
     let cancelled = false;
     async function load() {
       try {
-        const [dre, prevDre, recentSales, skuMargin, saleMarginRows, lastSync] = await Promise.all([
+        const [dre, prevDre, saleMarginRows, lastSync] = await Promise.all([
           fetchMonthlyDre(),
           fetchPreviousMonthDre(),
-          fetchRecentSales(5),
-          fetchSkuMarginForMonth(),
           fetchSaleMarginForMonth(),
           fetchLastSyncTime(),
         ]);
@@ -152,7 +141,7 @@ export function Dashboard() {
         }
         const basicoDre = aggregateDre(saleMarginRows.filter((r) => r.product_line === "basico"));
         const exclusivoDre = aggregateDre(saleMarginRows.filter((r) => r.product_line === "exclusivo"));
-        setData({ dre, prevDre, recentSales, skuMargin, basicoDre, exclusivoDre, lastSync });
+        setData({ dre, prevDre, basicoDre, exclusivoDre, lastSync });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
       }
@@ -174,7 +163,7 @@ export function Dashboard() {
   if (error) {
     return (
       <div className="app">
-        <TopBar subtitle="lucro líquido">
+        <TopBar subtitle="jackpot">
           <div className="topbar-controls">
             <AdminLink />
             <SignOutButton />
@@ -193,14 +182,14 @@ export function Dashboard() {
     );
   }
 
-  const { dre, prevDre, recentSales, skuMargin, basicoDre, exclusivoDre, lastSync } = data;
+  const { dre, prevDre, basicoDre, exclusivoDre, lastSync } = data;
   const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost;
   const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
   const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
 
   return (
     <div className="app">
-      <TopBar subtitle="lucro líquido">
+      <TopBar subtitle="jackpot">
         <div className="topbar-controls">
           <AdminLink />
           <SignOutButton />
@@ -208,18 +197,16 @@ export function Dashboard() {
       </TopBar>
 
       <h1 className="page-title">Visão geral — {monthLabel(dre.month)}</h1>
-      <p className="page-sub">
-        {recentSales.length} vendas recentes
-        {lastSync ? <> · última sincronização {timeAgo(lastSync)}</> : null}
-      </p>
+      {lastSync && <p className="page-sub">última sincronização {timeAgo(lastSync)}</p>}
 
       <div className="kpi-row" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
         <div className="kpi">
           <div className="kpi-label">Faturamento</div>
           <div className="kpi-value">R$ {money(dre.gross_revenue)}</div>
-          {grossDeltaPct !== null && (
-            <div className={`kpi-delta ${grossDeltaPct >= 0 ? "up" : "down"}`}>
-              {grossDeltaPct >= 0 ? "↑" : "↓"} {Math.abs(grossDeltaPct).toFixed(1)}% vs mês anterior
+          {prevDre && (
+            <div className={`kpi-delta ${grossDeltaPct !== null && grossDeltaPct >= 0 ? "up" : "down"}`}>
+              R$ {money(prevDre.gross_revenue)} mês passado
+              {grossDeltaPct !== null && <> · {grossDeltaPct >= 0 ? "↑" : "↓"} {Math.abs(grossDeltaPct).toFixed(1)}%</>}
             </div>
           )}
         </div>
@@ -238,85 +225,6 @@ export function Dashboard() {
       <DreWaterfall title="DRE do mês — Total" hint="faturamento → lucro líquido · drop básico + exclusivos" dre={dre} />
       <DreWaterfall title="DRE do mês — Drop Básico" hint="só as peças marcadas como linha básica" dre={basicoDre} />
       <DreWaterfall title="DRE do mês — Exclusivos" hint="só as peças marcadas como linha exclusiva" dre={exclusivoDre} />
-
-      <div className="grid">
-        <div className="col">
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Vendas recentes</span>
-              <span className="panel-hint">margem por venda</span>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th className="num">Bruto</th>
-                    <th className="num">Líquido</th>
-                    <th className="num">Margem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentSales.length === 0 && (
-                    <tr>
-                      <td colSpan={4} style={{ color: "var(--ink-faint)" }}>
-                        Nenhuma venda ainda.
-                      </td>
-                    </tr>
-                  )}
-                  {recentSales.map((s, i) => {
-                    const marginPct = s.gross_amount > 0 ? (s.net_profit / s.gross_amount) * 100 : 0;
-                    return (
-                      <tr key={`${s.sale_id}-${i}`}>
-                        <td className="sku">
-                          {s.product_name}
-                          {s.product_sku && <span className="sku-id">{s.product_sku}</span>}
-                        </td>
-                        <td className="num">{moneyCents(s.gross_amount)}</td>
-                        <td className="num">{moneyCents(s.net_profit)}</td>
-                        <td className="num">
-                          <span className={`margin-pill ${marginClass(marginPct)}`}>{marginPct.toFixed(1)}%</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="col">
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Margem por SKU</span>
-              <span className="panel-hint">{monthLabel(dre.month)}</span>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th className="num">Unid.</th>
-                    <th className="num">Margem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {skuMargin.map((row) => (
-                    <tr key={row.sku}>
-                      <td className="sku">{row.sku}</td>
-                      <td className="num">{row.units}</td>
-                      <td className="num">
-                        <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

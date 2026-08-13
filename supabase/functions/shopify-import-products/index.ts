@@ -92,8 +92,6 @@ interface ProductCostStub {
   tecido: number;
   estampa: number;
   costura: number;
-  sacolinha: number;
-  adesivo: number;
   outros_acabamentos: number;
 }
 
@@ -235,8 +233,6 @@ async function importFromProfile(profile: StoreProfile): Promise<ProductCostStub
       tecido: 0,
       estampa: 0,
       costura: 0,
-      sacolinha: 0,
-      adesivo: 0,
       outros_acabamentos: 0,
     };
   });

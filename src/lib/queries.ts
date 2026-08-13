@@ -44,6 +44,8 @@ export interface FeeRatesRow {
   imposto_pct: number;
   comissao_influencer_pct: number;
   desconto_medio_pct: number;
+  sacolinha: number;
+  adesivo: number;
 }
 
 export interface ProductCostRow {
@@ -53,8 +55,6 @@ export interface ProductCostRow {
   tecido: number;
   estampa: number;
   costura: number;
-  sacolinha: number;
-  adesivo: number;
   outros_acabamentos: number;
   product_line: ProductLine;
   collection: string | null;
@@ -85,17 +85,6 @@ export async function fetchMonthlyDre(month = currentMonthStart()) {
 
 export async function fetchPreviousMonthDre() {
   return fetchMonthlyDre(previousMonthStart());
-}
-
-export async function fetchRecentSales(limit = 5) {
-  const { data, error } = await db()
-    .from("sale_margin")
-    .select("*")
-    .order("sale_date", { ascending: false })
-    .limit(limit)
-    .returns<SaleMarginRow[]>();
-  if (error) throw error;
-  return data ?? [];
 }
 
 function monthRange(month: string) {
@@ -209,7 +198,7 @@ export async function updateFeeRates(rates: Omit<FeeRatesRow, "id">) {
 export async function fetchProductCosts() {
   const { data, error } = await db()
     .from("product_costs")
-    .select("id, sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line, collection, collection_published_at")
+    .select("id, sku, product_name, tecido, estampa, costura, outros_acabamentos, product_line, collection, collection_published_at")
     .order("product_name")
     .returns<ProductCostRow[]>();
   if (error) throw error;

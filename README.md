@@ -1,4 +1,4 @@
-# Lucro Líquido — Mental Madness
+# Mental Madness - Jackpot
 
 Calcula a margem real de cada venda (faturamento → custo direto → custos da
 venda → marketing rateado → fixos rateados → lucro líquido).
