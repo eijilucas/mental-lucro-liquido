@@ -42,8 +42,10 @@ async function verifyHmac(rawBody: string, hmacHeader: string | null): Promise<b
 
 interface ShopifyLineItem {
   id: number;
+  product_id: number | null;
   sku: string | null;
   title: string;
+  variant_title?: string | null;
   name?: string;
   quantity: number;
   price: string;
@@ -68,13 +70,18 @@ interface ShopifyRefund {
 }
 
 async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder) {
+  // Casa a venda com o custo da peça pelo product_id, não pelo SKU nem
+  // pelo variant_id — a loja não tem SKU cadastrado em nenhum produto na
+  // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
+  // tamanho da mesma peça, então o custo é por produto, não por variante.
   const rows = (order.line_items ?? [])
-    .filter((item) => !!item.sku)
+    .filter((item) => !!item.product_id)
     .map((item) => ({
       shopify_order_id: order.id,
       shopify_line_item_id: item.id,
-      product_sku: item.sku as string,
-      product_name: item.title ?? item.name ?? "Sem nome",
+      shopify_product_id: item.product_id as number,
+      product_sku: item.sku,
+      product_name: item.variant_title ? `${item.title} - ${item.variant_title}` : (item.title ?? item.name ?? "Sem nome"),
       quantity: item.quantity,
       gross_amount: Number(item.price) * item.quantity,
       sale_date: order.processed_at ?? order.created_at,
@@ -87,20 +94,29 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder) {
     .upsert(rows, { onConflict: "shopify_order_id,shopify_line_item_id" });
   if (error) throw error;
 
-  await ensureProductCostStubs(supabase, rows);
+  await ensureProductCostStubs(
+    supabase,
+    (order.line_items ?? [])
+      .filter((item) => !!item.product_id)
+      .map((item) => ({
+        shopify_product_id: item.product_id as number,
+        product_sku: item.sku,
+        product_name: item.title ?? item.name ?? "Sem nome",
+      })),
+  );
 }
 
 // Cria a linha da peça em `product_costs` na primeira venda que aparecer
-// com aquele SKU — custo tudo zerado, só o SKU e o nome certos (vieram
-// direto da Shopify, então batem por definição). O admin só precisa
-// preencher os números depois, nunca digita SKU na mão — elimina o erro
-// de digitação que faz o custo direto de uma venda virar zero sem avisar.
+// com aquele product_id — custo tudo zerado, só o nome certo (veio
+// direto da Shopify, sem o tamanho/variante). O admin só precisa
+// preencher os números depois.
 async function ensureProductCostStubs(
   supabase: SupabaseClient,
-  saleRows: { product_sku: string; product_name: string }[],
+  saleRows: { shopify_product_id: number; product_sku: string | null; product_name: string }[],
 ) {
-  const uniqueBySku = new Map(saleRows.map((r) => [r.product_sku, r.product_name]));
-  const stubs = Array.from(uniqueBySku, ([sku, product_name]) => ({
+  const uniqueByProduct = new Map(saleRows.map((r) => [r.shopify_product_id, { sku: r.product_sku, product_name: r.product_name }]));
+  const stubs = Array.from(uniqueByProduct, ([shopify_product_id, { sku, product_name }]) => ({
+    shopify_product_id,
     sku,
     product_name,
     tecido: 0,
@@ -111,7 +127,9 @@ async function ensureProductCostStubs(
     outros_acabamentos: 0,
   }));
 
-  const { error } = await supabase.from("product_costs").upsert(stubs, { onConflict: "sku", ignoreDuplicates: true });
+  const { error } = await supabase
+    .from("product_costs")
+    .upsert(stubs, { onConflict: "shopify_product_id", ignoreDuplicates: true });
   if (error) throw error;
 }
 

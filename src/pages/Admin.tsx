@@ -13,7 +13,6 @@ import {
   fetchProductCosts,
   updateProductCost,
   updateProductName,
-  updateProductSku,
   updateProductLine,
   deleteProductCost,
   insertProductCost,
@@ -40,26 +39,14 @@ function parsePercent(value: string): number | null {
   const parsed = Number(value.replace("%", "").trim().replace(",", "."));
   return Number.isNaN(parsed) ? null : parsed;
 }
-const DIACRITICS_RE = new RegExp(String.fromCharCode(91) + "\\u0300-\\u036f" + String.fromCharCode(93), "g");
-function skuFromName(name: string): string {
-  const slug = name
-    .normalize("NFD")
-    .replace(DIACRITICS_RE, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${slug}-${suffix}`;
-}
 function monthLabel(monthStr: string) {
   const [y, m] = monthStr.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 }
 
-function emptyProductCost(product_line: ProductCostRow["product_line"]): ProductCostRow {
+function emptyProductCost(product_line: ProductCostRow["product_line"]): Omit<ProductCostRow, "id"> {
   return {
-    sku: "",
+    sku: null,
     product_name: "",
     tecido: 0,
     estampa: 0,
@@ -78,7 +65,6 @@ function ProductLinePanel({
   setNewProduct,
   onCostBlur,
   onNameBlur,
-  onSkuBlur,
   onMove,
   onDelete,
   onAdd,
@@ -86,13 +72,12 @@ function ProductLinePanel({
 }: {
   title: string;
   products: ProductCostRow[];
-  newProduct: ProductCostRow;
-  setNewProduct: Dispatch<SetStateAction<ProductCostRow>>;
-  onCostBlur: (sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">, value: string) => void;
-  onNameBlur: (sku: string, value: string) => void;
-  onSkuBlur: (sku: string, value: string) => void;
-  onMove: (sku: string) => void;
-  onDelete: (sku: string) => void;
+  newProduct: Omit<ProductCostRow, "id">;
+  setNewProduct: Dispatch<SetStateAction<Omit<ProductCostRow, "id">>>;
+  onCostBlur: (id: string, field: keyof Omit<ProductCostRow, "id" | "sku" | "product_name" | "product_line">, value: string) => void;
+  onNameBlur: (id: string, value: string) => void;
+  onMove: (id: string) => void;
+  onDelete: (id: string) => void;
   onAdd: () => void;
   moveLabel: string;
 }) {
@@ -127,20 +112,13 @@ function ProductLinePanel({
             {products.map((p) => {
               const total = p.tecido + p.estampa + p.costura + p.sacolinha + p.adesivo + p.outros_acabamentos;
               return (
-                <tr key={p.sku}>
+                <tr key={p.id}>
                   <td className="sku">
                     <input
                       className="cell-text"
                       defaultValue={p.product_name}
-                      onBlur={(e) => onNameBlur(p.sku, e.target.value)}
-                      style={{ width: 160, display: "block", marginBottom: 4 }}
-                    />
-                    <input
-                      className="cell-text sku-id-input"
-                      defaultValue={p.sku}
-                      title="SKU — precisa ser exatamente igual ao SKU real cadastrado na Shopify, senão a venda não casa com esse custo"
-                      onBlur={(e) => onSkuBlur(p.sku, e.target.value)}
-                      style={{ width: 160, display: "block" }}
+                      onBlur={(e) => onNameBlur(p.id, e.target.value)}
+                      style={{ width: 220, display: "block" }}
                     />
                     {total === 0 && (
                       <span className="margin-pill low" style={{ marginTop: 6 }} title="Peça criada automaticamente pela primeira venda — falta preencher o custo">
@@ -150,17 +128,17 @@ function ProductLinePanel({
                   </td>
                   {costFields.map((field) => (
                     <td className="num" key={field}>
-                      <input className="cell-input" defaultValue={money(p[field])} onBlur={(e) => onCostBlur(p.sku, field, e.target.value)} />
+                      <input className="cell-input" defaultValue={money(p[field])} onBlur={(e) => onCostBlur(p.id, field, e.target.value)} />
                     </td>
                   ))}
                   <td className="num total-cell">{money(total)}</td>
                   <td>
-                    <button type="button" className="btn btn-ghost" style={{ padding: "5px 8px", fontSize: 10 }} onClick={() => onMove(p.sku)}>
+                    <button type="button" className="btn btn-ghost" style={{ padding: "5px 8px", fontSize: 10 }} onClick={() => onMove(p.id)}>
                       {moveLabel}
                     </button>
                   </td>
                   <td>
-                    <div className="icon-cell" onClick={() => onDelete(p.sku)}>✕</div>
+                    <div className="icon-cell" onClick={() => onDelete(p.id)}>✕</div>
                   </td>
                 </tr>
               );
@@ -170,7 +148,7 @@ function ProductLinePanel({
                 <input
                   className="cell-text"
                   placeholder="nome da peça"
-                  style={{ width: 180 }}
+                  style={{ width: 220 }}
                   value={newProduct.product_name}
                   onChange={(e) => setNewProduct((s) => ({ ...s, product_name: e.target.value }))}
                 />
@@ -207,8 +185,8 @@ export function Admin() {
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
-  const [newProductBasico, setNewProductBasico] = useState<ProductCostRow>(() => emptyProductCost("basico"));
-  const [newProductExclusivo, setNewProductExclusivo] = useState<ProductCostRow>(() => emptyProductCost("exclusivo"));
+  const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
+  const [newProductExclusivo, setNewProductExclusivo] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("exclusivo"));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [feeSaved, setFeeSaved] = useState(false);
@@ -280,46 +258,35 @@ export function Admin() {
     setTimeout(() => setFeeSaved(false), 2500);
   }
 
-  async function handleProductCostBlur(sku: string, field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">, value: string) {
+  async function handleProductCostBlur(id: string, field: keyof Omit<ProductCostRow, "id" | "sku" | "product_name" | "product_line">, value: string) {
     const parsed = parseMoney(value);
     if (parsed === null) return;
-    setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, [field]: parsed } : r)));
-    await updateProductCost(sku, field, parsed);
+    setProductCosts((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: parsed } : r)));
+    await updateProductCost(id, field, parsed);
   }
 
-  async function handleAddProduct(draft: ProductCostRow, reset: () => void) {
+  async function handleAddProduct(draft: Omit<ProductCostRow, "id">, reset: () => void) {
     if (!draft.product_name.trim()) return;
-    const row = await insertProductCost({ ...draft, sku: skuFromName(draft.product_name) });
+    const row = await insertProductCost(draft);
     setProductCosts((rows) => [...rows, row]);
     reset();
   }
 
-  async function handleProductNameBlur(sku: string, value: string) {
+  async function handleProductNameBlur(id: string, value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
-    setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, product_name: trimmed } : r)));
-    await updateProductName(sku, trimmed);
+    setProductCosts((rows) => rows.map((r) => (r.id === id ? { ...r, product_name: trimmed } : r)));
+    await updateProductName(id, trimmed);
   }
 
-  async function handleSkuBlur(oldSku: string, value: string) {
-    const trimmed = value.trim().toUpperCase();
-    if (!trimmed || trimmed === oldSku) return;
-    if (productCosts.some((r) => r.sku === trimmed)) {
-      alert(`Já existe uma peça com o SKU ${trimmed}.`);
-      return;
-    }
-    setProductCosts((rows) => rows.map((r) => (r.sku === oldSku ? { ...r, sku: trimmed } : r)));
-    await updateProductSku(oldSku, trimmed);
+  async function handleLineChange(id: string, line: ProductCostRow["product_line"]) {
+    setProductCosts((rows) => rows.map((r) => (r.id === id ? { ...r, product_line: line } : r)));
+    await updateProductLine(id, line);
   }
 
-  async function handleLineChange(sku: string, line: ProductCostRow["product_line"]) {
-    setProductCosts((rows) => rows.map((r) => (r.sku === sku ? { ...r, product_line: line } : r)));
-    await updateProductLine(sku, line);
-  }
-
-  async function handleDeleteProduct(sku: string) {
-    setProductCosts((rows) => rows.filter((r) => r.sku !== sku));
-    await deleteProductCost(sku);
+  async function handleDeleteProduct(id: string) {
+    setProductCosts((rows) => rows.filter((r) => r.id !== id));
+    await deleteProductCost(id);
   }
 
   const marketingPool = overhead.filter((r) => r.is_marketing).reduce((sum, r) => sum + r.amount, 0);
@@ -643,8 +610,7 @@ export function Admin() {
                 setNewProduct={setNewProductBasico}
                 onCostBlur={handleProductCostBlur}
                 onNameBlur={handleProductNameBlur}
-                onSkuBlur={handleSkuBlur}
-                onMove={(sku) => handleLineChange(sku, "exclusivo")}
+                onMove={(id) => handleLineChange(id, "exclusivo")}
                 onDelete={handleDeleteProduct}
                 onAdd={() => handleAddProduct(newProductBasico, () => setNewProductBasico(emptyProductCost("basico")))}
                 moveLabel="mover pra Exclusivo"
@@ -656,8 +622,7 @@ export function Admin() {
                 setNewProduct={setNewProductExclusivo}
                 onCostBlur={handleProductCostBlur}
                 onNameBlur={handleProductNameBlur}
-                onSkuBlur={handleSkuBlur}
-                onMove={(sku) => handleLineChange(sku, "basico")}
+                onMove={(id) => handleLineChange(id, "basico")}
                 onDelete={handleDeleteProduct}
                 onAdd={() => handleAddProduct(newProductExclusivo, () => setNewProductExclusivo(emptyProductCost("exclusivo")))}
                 moveLabel="mover pra Básico"

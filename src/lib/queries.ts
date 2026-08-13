@@ -4,7 +4,7 @@ export type ProductLine = "basico" | "exclusivo";
 
 export interface SaleMarginRow {
   sale_id: string;
-  product_sku: string;
+  product_sku: string | null;
   product_name: string;
   quantity: number;
   gross_amount: number;
@@ -46,7 +46,8 @@ export interface FeeRatesRow {
 }
 
 export interface ProductCostRow {
-  sku: string;
+  id: string;
+  sku: string | null;
   product_name: string;
   tecido: number;
   estampa: number;
@@ -205,7 +206,7 @@ export async function updateFeeRates(rates: Omit<FeeRatesRow, "id">) {
 export async function fetchProductCosts() {
   const { data, error } = await db()
     .from("product_costs")
-    .select("sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line")
+    .select("id, sku, product_name, tecido, estampa, costura, sacolinha, adesivo, outros_acabamentos, product_line")
     .order("product_name")
     .returns<ProductCostRow[]>();
   if (error) throw error;
@@ -213,47 +214,47 @@ export async function fetchProductCosts() {
 }
 
 export async function updateProductCost(
-  sku: string,
-  field: keyof Omit<ProductCostRow, "sku" | "product_name" | "product_line">,
+  id: string,
+  field: keyof Omit<ProductCostRow, "id" | "sku" | "product_name" | "product_line">,
   value: number,
 ) {
   const { error } = await db()
     .from("product_costs")
     .update({ [field]: value, updated_at: new Date().toISOString() })
-    .eq("sku", sku);
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function updateProductLine(sku: string, product_line: ProductLine) {
+export async function updateProductLine(id: string, product_line: ProductLine) {
   const { error } = await db()
     .from("product_costs")
     .update({ product_line, updated_at: new Date().toISOString() })
-    .eq("sku", sku);
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function updateProductName(sku: string, product_name: string) {
+export async function updateProductName(id: string, product_name: string) {
   const { error } = await db()
     .from("product_costs")
     .update({ product_name, updated_at: new Date().toISOString() })
-    .eq("sku", sku);
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function updateProductSku(sku: string, newSku: string) {
+export async function updateProductSku(id: string, newSku: string) {
   const { error } = await db()
     .from("product_costs")
     .update({ sku: newSku, updated_at: new Date().toISOString() })
-    .eq("sku", sku);
+    .eq("id", id);
   if (error) throw error;
 }
 
-export async function deleteProductCost(sku: string) {
-  const { error } = await db().from("product_costs").delete().eq("sku", sku);
+export async function deleteProductCost(id: string) {
+  const { error } = await db().from("product_costs").delete().eq("id", id);
   if (error) throw error;
 }
 
-export async function insertProductCost(row: ProductCostRow) {
+export async function insertProductCost(row: Omit<ProductCostRow, "id">) {
   const { data, error } = await db().from("product_costs").insert(row).select().single<ProductCostRow>();
   if (error) throw error;
   return data;

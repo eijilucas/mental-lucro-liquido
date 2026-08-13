@@ -57,67 +57,62 @@ npm run dev
 Copiar `.env.example` pra `.env` e preencher com a URL e a anon key do
 projeto (já feito neste ambiente).
 
-## Webhook da Shopify — o que falta pra ligar de verdade
+## Webhook da Shopify — ativo
 
-Código pronto em `supabase/functions/shopify-webhook/index.ts`. Recebe
+Código em `supabase/functions/shopify-webhook/index.ts`. Recebe
 `orders/paid`, `orders/cancelled` e `refunds/create` e mantém
 `sale_revenue` atualizada (upsert idempotente por `shopify_order_id` +
 `shopify_line_item_id` — a Shopify pode reenviar o mesmo webhook mais de
 uma vez, então não pode duplicar).
 
-**Pra ativar, falta só:**
+**Já implantado e com os 3 webhooks registrados** na loja
+`m3ntalmadness.myshopify.com`, apontando pra
+`https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`.
 
-1. Alguém com acesso admin da loja Shopify precisa criar um app
-   custom/private com escopo de leitura de pedidos, pra gerar um webhook
-   secret.
-2. Configurar o secret no projeto:
-   ```
-   npx supabase secrets set SHOPIFY_WEBHOOK_SECRET=<secret> --project-ref vatoeojxpejefxqslgli
-   ```
-3. Fazer o deploy da function:
-   ```
-   npx supabase functions deploy shopify-webhook --project-ref vatoeojxpejefxqslgli
-   ```
-   Isso devolve uma URL (algo como
-   `https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`).
-4. Na Shopify, registrar **três** webhooks apontando pra essa mesma URL,
-   um pra cada tópico: `orders/paid`, `orders/cancelled`, `refunds/create`.
+App usado: "Basic JackPot" (custom app criado via Shopify Dev Dashboard —
+modelo 2026, sem Partner Organization, só permissão de app-development na
+loja). Credenciais (`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`,
+`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_WEBHOOK_SECRET`) já configuradas como
+secrets no projeto Supabase.
 
-**Coisa importante pra funcionar direito**: o SKU cadastrado em "Custo de
-cada peça" precisa ser **exatamente igual** ao SKU real da peça na
-Shopify — é assim que o sistema liga uma venda ao custo dela. SKU errado
-não dá erro, só faz o custo direto daquela venda virar zero silenciosamente
-(lucro aparente maior do que o real). Pra evitar digitar SKU errado, o
-próprio `shopify-webhook` já cria a linha da peça sozinho (SKU + nome
-certos, direto do payload) na primeira venda daquele SKU — o admin só
-precisa preencher os números de custo depois. As peças criadas assim
-aparecem com o selo "custo zerado" na tela até alguém preencher.
+**Como o matching peça↔venda funciona:** por `shopify_variant_id`, não
+por SKU — a loja não tem SKU cadastrado em nenhuma variante na Shopify
+(`"sku": null` em toda a API), então usar SKU deixaria toda venda sem
+custo batido. `shopify_variant_id` sempre existe (gerado pela própria
+Shopify) e é a chave real de `product_costs` agora; o campo SKU continua
+existindo na tela "Custo de cada peça", mas é só informativo/opcional, não
+tem mais função no cálculo. `product_costs.id` (uuid) é a chave usada por
+todas as edições no admin (custo, nome, linha, SKU, exclusão).
 
-## Importar o catálogo da Shopify antes de qualquer venda
+O próprio `shopify-webhook` cria a linha da peça sozinho (variant_id +
+nome certos, direto do payload da Shopify) na primeira venda daquele
+variant_id — o admin só precisa preencher os números de custo depois. As
+peças criadas assim aparecem com o selo "custo zerado" na tela até
+alguém preencher.
 
-Código pronto em
-`supabase/functions/shopify-import-products/index.ts`. Em vez de esperar
-o `shopify-webhook` ir descobrindo peça por peça conforme elas vendem,
-essa function busca o catálogo inteiro da Shopify de uma vez (API de
-Produtos, com paginação) e cria todas as linhas de uma vez em
-`product_costs` — custo zerado, prontas pro Vitor preencher com calma
-antes do webhook começar a ligar vendas de verdade. Não sobrescreve
-custo já preenchido (`ignoreDuplicates`), então dá pra rodar de novo
-sempre que a loja tiver produto novo.
+## Importar o catálogo da Shopify — automático
 
-Precisa das mesmas credenciais admin da Shopify do webhook, mais um
-token de API com escopo `read_products` (pode ser o mesmo app custom,
-só marcando esse escopo a mais):
+Código em `supabase/functions/shopify-import-products/index.ts`. Busca só
+os produtos da coleção **"Basic MM Drop"** na Shopify (API de Produtos,
+com paginação) e cria uma linha **por peça** (não por variante — P/M/G
+compartilham o mesmo custo) em `product_costs`, custo zerado. Não
+sobrescreve custo já preenchido (`ignoreDuplicates`), então roda de novo
+sem bagunçar nada.
 
-```
-npx supabase secrets set SHOPIFY_STORE_DOMAIN=sua-loja.myshopify.com --project-ref vatoeojxpejefxqslgli
-npx supabase secrets set SHOPIFY_ADMIN_API_TOKEN=<token, escopo read_products> --project-ref vatoeojxpejefxqslgli
-npx supabase secrets set ADMIN_IMPORT_SECRET=<qualquer string longa e aleatória> --project-ref vatoeojxpejefxqslgli
-npx supabase functions deploy shopify-import-products --project-ref vatoeojxpejefxqslgli
-```
+**Roda sozinha todo dia às 6h UTC (3h da manhã em Brasília)**, via
+`pg_cron` + `pg_net` (migração `20260812000007_schedule_import.sql`).
+Assim, todo produto novo que o Vitor publicar na Shopify dentro da
+coleção "Basic MM Drop" aparece na tela "Custo de cada peça" no dia
+seguinte, sem precisar ninguém lembrar de rodar nada na mão. Os
+"Exclusivos" continuam entrando pelo jeito de sempre: o `shopify-webhook`
+cria a linha sozinho na primeira venda de cada um.
 
-Pra disparar a importação (não é automático, chama quando quiser):
+O secret usado pelo cron pra chamar a function fica no **Supabase Vault**
+(`admin_import_secret`), não em texto puro em nenhum arquivo — só o nome
+do secret aparece na migração.
 
+Pra rodar manualmente também (ex: testar um produto novo sem esperar até
+amanhã):
 ```
 curl -X POST https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-import-products \
   -H "Authorization: Bearer <ADMIN_IMPORT_SECRET>"
@@ -125,14 +120,16 @@ curl -X POST https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-impor
 
 ## Próximos passos
 
-1. Ligar o webhook e importar o catálogo de verdade (ver seções acima) —
-   depende de acesso à Shopify.
-2. Tela pra gerenciar `admin_emails` (hoje só dá pra editar via SQL Editor
+1. Vitor preencher o custo direto das peças já importadas (aba "Custo de
+   cada peça" no admin — estão zeradas até alguém preencher).
+2. Confirmar que uma venda real cai certinho no dashboard depois do
+   webhook registrado (checar depois da próxima venda da loja).
+3. Tela pra gerenciar `admin_emails` (hoje só dá pra editar via SQL Editor
    ou CLI).
-3. Seletor de mês no dashboard/admin — hoje sempre mostra o mês corrente;
+4. Seletor de mês no dashboard/admin — hoje sempre mostra o mês corrente;
    os botões "7d" / "Trimestre" e as setas do `month-picker` ainda são só
    visuais.
-4. Reembolso parcial de item com desconto aplicado pode não bater 100%
+5. Reembolso parcial de item com desconto aplicado pode não bater 100%
    com o valor original (a function usa o preço do item no refund, não
    recalcula rateio de desconto por item) — ok pro volume normal, vale
    revisar se começar a ter muito reembolso parcial complexo.

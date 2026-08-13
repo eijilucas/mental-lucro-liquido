@@ -308,7 +308,6 @@ td.num, th.num { text-align: right; }
 td.num { font-family: var(--font-display); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
 td.sku { color: var(--ink); font-weight: 500; }
 td.sku .sku-id { display: block; font-family: var(--font-body); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); font-weight: 400; margin-top: 2px; }
-td.sku input.sku-id-input { font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); padding: 3px 6px; text-transform: uppercase; }
 
 .margin-pill { display: inline-block; font-family: var(--font-body); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border: 1px solid transparent; }
 .margin-pill.good { color: var(--positive); border-color: var(--positive); }

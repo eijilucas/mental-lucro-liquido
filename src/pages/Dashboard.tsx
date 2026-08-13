@@ -264,13 +264,13 @@ export function Dashboard() {
                       </td>
                     </tr>
                   )}
-                  {recentSales.map((s) => {
+                  {recentSales.map((s, i) => {
                     const marginPct = s.gross_amount > 0 ? (s.net_profit / s.gross_amount) * 100 : 0;
                     return (
-                      <tr key={`${s.sale_id}-${s.product_sku}`}>
+                      <tr key={`${s.sale_id}-${i}`}>
                         <td className="sku">
                           {s.product_name}
-                          <span className="sku-id">{s.product_sku}</span>
+                          {s.product_sku && <span className="sku-id">{s.product_sku}</span>}
                         </td>
                         <td className="num">{moneyCents(s.gross_amount)}</td>
                         <td className="num">{moneyCents(s.net_profit)}</td>
