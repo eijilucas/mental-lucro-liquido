@@ -132,6 +132,7 @@ export async function fetchSkuMarginForRange(start: string, end: string) {
       sku: r.sku,
       units: r.units,
       netProfit: r.netProfit,
+      profitPerUnit: r.units > 0 ? r.netProfit / r.units : 0,
       marginPct: r.grossAmount > 0 ? (r.netProfit / r.grossAmount) * 100 : 0,
     }))
     .sort((a, b) => b.marginPct - a.marginPct);

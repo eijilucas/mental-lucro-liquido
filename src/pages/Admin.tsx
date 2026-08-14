@@ -28,7 +28,7 @@ import {
 } from "../lib/queries";
 
 type Tab = "sku" | "fees" | "overhead" | "profit" | "coupon";
-type PieceMargin = { sku: string; units: number; netProfit: number; marginPct: number };
+type PieceMargin = { sku: string; units: number; netProfit: number; profitPerUnit: number; marginPct: number };
 
 function marginClass(pct: number) {
   if (pct >= 40) return "good";
@@ -795,6 +795,9 @@ export function Admin() {
                       <th className="num sortable" onClick={() => handlePieceSort("netProfit")}>
                         Lucro{pieceSort.field === "netProfit" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
                       </th>
+                      <th className="num sortable" onClick={() => handlePieceSort("profitPerUnit")}>
+                        Lucro/un.{pieceSort.field === "profitPerUnit" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
+                      </th>
                       <th className="num sortable" onClick={() => handlePieceSort("marginPct")}>
                         Margem{pieceSort.field === "marginPct" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
                       </th>
@@ -813,7 +816,7 @@ export function Admin() {
                       if (filtered.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={4} style={{ color: "var(--ink-faint)" }}>
+                            <td colSpan={5} style={{ color: "var(--ink-faint)" }}>
                               {pieceMargin.length === 0 ? "Nenhuma venda ainda esse mês." : "Nenhuma peça encontrada."}
                             </td>
                           </tr>
@@ -824,6 +827,7 @@ export function Admin() {
                           <td className="sku">{row.sku}</td>
                           <td className="num">{row.units}</td>
                           <td className="num">R$ {money(row.netProfit)}</td>
+                          <td className="num">R$ {money(row.profitPerUnit)}</td>
                           <td className="num">
                             <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
                           </td>
