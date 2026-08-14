@@ -848,12 +848,12 @@ export function Admin() {
               </div>
               <DreWaterfall
                 title="DRE — Com cupom"
-                hint="pedidos com código de desconto aplicado"
+                hint={`${new Set(couponRows.filter((r) => r.has_coupon).map((r) => r.sale_id)).size} vendas com código de desconto aplicado`}
                 dre={aggregateDre(couponRows.filter((r) => r.has_coupon))}
               />
               <DreWaterfall
                 title="DRE — Sem cupom"
-                hint="pedidos sem código de desconto"
+                hint={`${new Set(couponRows.filter((r) => !r.has_coupon).map((r) => r.sale_id)).size} vendas sem código de desconto`}
                 dre={aggregateDre(couponRows.filter((r) => !r.has_coupon))}
               />
             </>
