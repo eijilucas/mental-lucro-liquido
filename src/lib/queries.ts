@@ -128,7 +128,12 @@ export async function fetchSkuMarginForRange(start: string, end: string) {
     bySku.set(row.piece_name, entry);
   }
   return Array.from(bySku.values())
-    .map((r) => ({ sku: r.sku, units: r.units, marginPct: r.grossAmount > 0 ? (r.netProfit / r.grossAmount) * 100 : 0 }))
+    .map((r) => ({
+      sku: r.sku,
+      units: r.units,
+      netProfit: r.netProfit,
+      marginPct: r.grossAmount > 0 ? (r.netProfit / r.grossAmount) * 100 : 0,
+    }))
     .sort((a, b) => b.marginPct - a.marginPct);
 }
 
