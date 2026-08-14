@@ -19,6 +19,15 @@
   --font-mono: "Cinzel", serif;
 }
 
+@font-face {
+  font-family: "Horst Blackletter";
+  src: url("/fonts/Horst.woff2") format("woff2"),
+    url("/fonts/Horst.woff") format("woff");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root { height: 100%; }
@@ -50,7 +59,7 @@ body {
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-logo { width: 30px; height: 30px; object-fit: contain; }
-.brand-mark { font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.03em; color: var(--ink); }
+.brand-mark { font-family: "Horst Blackletter", var(--font-display); font-weight: 900; font-size: 24px; letter-spacing: 0.02em; color: var(--ink); }
 .brand-sep { color: var(--border-strong); }
 .brand-app {
   font-family: var(--font-body);
