@@ -74,11 +74,16 @@ interface ShopifyLineItem {
   price: string;
 }
 
+interface ShopifyDiscountCode {
+  code: string;
+}
+
 interface ShopifyOrder {
   id: number;
   processed_at?: string;
   created_at: string;
   line_items: ShopifyLineItem[];
+  discount_codes?: ShopifyDiscountCode[];
 }
 
 interface ShopifyRefundLineItem {
@@ -97,6 +102,8 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   // pelo variant_id — a loja não tem SKU cadastrado em nenhum produto na
   // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
   // tamanho da mesma peça, então o custo é por produto, não por variante.
+  const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+
   const rows = (order.line_items ?? [])
     .filter((item) => !!item.product_id)
     .map((item) => ({
@@ -108,6 +115,7 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
       quantity: item.quantity,
       gross_amount: Number(item.price) * item.quantity,
       sale_date: order.processed_at ?? order.created_at,
+      has_coupon: hasCoupon,
     }));
 
   if (rows.length === 0) return;

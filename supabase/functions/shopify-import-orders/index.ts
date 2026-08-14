@@ -75,6 +75,10 @@ interface ShopifyRefund {
   refund_line_items: ShopifyRefundLineItem[];
 }
 
+interface ShopifyDiscountCode {
+  code: string;
+}
+
 interface ShopifyOrder {
   id: number;
   processed_at?: string;
@@ -83,6 +87,7 @@ interface ShopifyOrder {
   financial_status: string;
   line_items: ShopifyLineItem[];
   refunds: ShopifyRefund[];
+  discount_codes?: ShopifyDiscountCode[];
 }
 
 interface SaleRow {
@@ -94,6 +99,7 @@ interface SaleRow {
   quantity: number;
   gross_amount: number;
   sale_date: string;
+  has_coupon: boolean;
 }
 
 function extractNextUrl(linkHeader: string | null): string | null {
@@ -150,6 +156,8 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
     }
   }
 
+  const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+
   return (order.line_items ?? [])
     .filter((item) => !!item.product_id)
     .map((item) => {
@@ -165,6 +173,7 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
         quantity,
         gross_amount,
         sale_date: order.processed_at ?? order.created_at,
+        has_coupon: hasCoupon,
       };
     })
     .filter((row) => row.quantity > 0);

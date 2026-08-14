@@ -2,6 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { TopBar, AdminBackLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
 import { DateRangePicker } from "../components/DateRangePicker";
+import { DreWaterfall, aggregateDre } from "../components/DreWaterfall";
 import { supabase } from "../lib/supabase";
 import {
   fetchMonthlyOverhead,
@@ -17,14 +18,16 @@ import {
   deleteProductCost,
   insertProductCost,
   fetchSkuMarginForRange,
+  fetchSaleMarginForRange,
   currentMonthStart,
   todayStr,
   type OverheadRow,
   type FeeRatesRow,
   type ProductCostRow,
+  type SaleMarginRow,
 } from "../lib/queries";
 
-type Tab = "sku" | "fees" | "overhead" | "profit";
+type Tab = "sku" | "fees" | "overhead" | "profit" | "coupon";
 type PieceMargin = { sku: string; units: number; marginPct: number };
 
 function marginClass(pct: number) {
@@ -203,6 +206,7 @@ export function Admin() {
   const [pieceSort, setPieceSort] = useState<{ field: keyof PieceMargin; dir: "asc" | "desc" }>({ field: "marginPct", dir: "desc" });
   const [profitRangeStart, setProfitRangeStart] = useState(currentMonthStart());
   const [profitRangeEnd, setProfitRangeEnd] = useState(todayStr());
+  const [couponRows, setCouponRows] = useState<SaleMarginRow[]>([]);
   const [overheadMonth, setOverheadMonth] = useState(currentMonthStart());
   const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
@@ -246,6 +250,16 @@ export function Admin() {
     let cancelled = false;
     fetchSkuMarginForRange(profitRangeStart, profitRangeEnd).then((rows) => {
       if (!cancelled) setPieceMargin(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profitRangeStart, profitRangeEnd]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSaleMarginForRange(profitRangeStart, profitRangeEnd).then((rows) => {
+      if (!cancelled) setCouponRows(rows);
     });
     return () => {
       cancelled = true;
@@ -392,6 +406,10 @@ export function Admin() {
             </div>
             <div className={`tab ${tab === "profit" ? "active" : ""}`} onClick={() => setTab("profit")}>
               Lucro por peça
+              <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
+            </div>
+            <div className={`tab ${tab === "coupon" ? "active" : ""}`} onClick={() => setTab("coupon")}>
+              Cupom
               <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
             </div>
           </div>
@@ -812,6 +830,33 @@ export function Admin() {
                 </table>
               </div>
             </div>
+          )}
+
+          {tab === "coupon" && (
+            <>
+              <div className="panel-head" style={{ padding: "0 0 16px" }}>
+                <div>
+                  <div className="panel-title" style={{ marginBottom: 0 }}>Cupom — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
+                  <div className="panel-hint">DRE separado por pedido ter usado cupom de desconto ou não.</div>
+                </div>
+                <DateRangePicker
+                  start={profitRangeStart}
+                  end={profitRangeEnd}
+                  maxDate={todayStr()}
+                  onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                />
+              </div>
+              <DreWaterfall
+                title="DRE — Com cupom"
+                hint="pedidos com código de desconto aplicado"
+                dre={aggregateDre(couponRows.filter((r) => r.has_coupon))}
+              />
+              <DreWaterfall
+                title="DRE — Sem cupom"
+                hint="pedidos sem código de desconto"
+                dre={aggregateDre(couponRows.filter((r) => !r.has_coupon))}
+              />
+            </>
           )}
         </>
       )}

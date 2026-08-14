@@ -16,6 +16,7 @@ export interface SaleMarginRow {
   sale_date: string;
   product_line: ProductLine;
   piece_name: string;
+  has_coupon: boolean;
 }
 
 export interface MonthlyDreRow {
