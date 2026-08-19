@@ -871,7 +871,13 @@ export function Admin() {
             const excluded = [/gift\s*card/i, /pingente/i];
             const soldNames = new Set(pieceMargin.map((row) => row.sku));
             const unsold = productCosts.filter(
-              (p) => !soldNames.has(p.product_name) && !excluded.some((re) => re.test(p.product_name)),
+              (p) =>
+                !soldNames.has(p.product_name) &&
+                !excluded.some((re) => re.test(p.product_name)) &&
+                // drop antigo (exclusivo de coleção passada) não é anomalia —
+                // só interessa peça sem venda da coleção atual, ou do básico
+                // (que não tem conceito de coleção/drop).
+                (p.product_line === "basico" || p.collection === currentCollection?.collection),
             );
             return (
               <div className="panel" style={{ marginTop: 16 }}>
