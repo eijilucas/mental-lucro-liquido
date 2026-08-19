@@ -867,6 +867,50 @@ export function Admin() {
             </div>
           )}
 
+          {tab === "profit" && (() => {
+            const excluded = [/gift\s*card/i, /pingente/i];
+            const soldNames = new Set(pieceMargin.map((row) => row.sku));
+            const unsold = productCosts.filter(
+              (p) => !soldNames.has(p.product_name) && !excluded.some((re) => re.test(p.product_name)),
+            );
+            return (
+              <div className="panel" style={{ marginTop: 16 }}>
+                <div className="panel-head">
+                  <div>
+                    <div className="panel-title">Sem venda no período</div>
+                    <div className="panel-hint">Peças cadastradas mas sem nenhuma venda em {rangeLabel(profitRangeStart, profitRangeEnd)} — sem venda, não tem lucro pra calcular. Útil pra achar cadastro duplicado ou peça que ainda não foi lançada.</div>
+                  </div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Peça</th>
+                        <th>Linha</th>
+                        <th className="num">Custo direto/un.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unsold.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} style={{ color: "var(--ink-faint)" }}>Toda peça cadastrada teve venda nesse período.</td>
+                        </tr>
+                      ) : (
+                        unsold.map((p) => (
+                          <tr key={p.id}>
+                            <td className="sku">{p.product_name}</td>
+                            <td>{p.product_line === "basico" ? "Básico" : "Exclusivo"}</td>
+                            <td className="num">R$ {money(p.tecido + p.estampa + p.costura + p.outros_acabamentos)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           {tab === "coupon" && (
             <>
               <div className="panel-head" style={{ padding: "0 0 16px" }}>
