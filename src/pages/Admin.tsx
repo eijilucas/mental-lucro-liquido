@@ -303,7 +303,9 @@ export function Admin() {
     if (!feeRates) return;
     await updateFeeRates({
       taxa_shopify_pct: feeRates.taxa_shopify_pct,
-      taxa_gateway_pct: feeRates.taxa_gateway_pct,
+      taxa_gateway_cartao_pct: feeRates.taxa_gateway_cartao_pct,
+      taxa_gateway_pix_pct: feeRates.taxa_gateway_pix_pct,
+      taxa_gateway_pix_fixo: feeRates.taxa_gateway_pix_fixo,
       imposto_pct: feeRates.imposto_pct,
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
       desconto_medio_pct: feeRates.desconto_medio_pct,
@@ -672,12 +674,33 @@ export function Admin() {
                 <div className="field">
                   <label>Taxa do cartão</label>
                   <input
-                    defaultValue={`${(feeRates.taxa_gateway_pct * 100).toFixed(2)}%`}
+                    defaultValue={`${(feeRates.taxa_gateway_cartao_pct * 100).toFixed(2)}%`}
                     onBlur={(e) => {
                       const v = parsePercent(e.target.value);
-                      if (v !== null) setFeeRates({ ...feeRates, taxa_gateway_pct: v / 100 });
+                      if (v !== null) setFeeRates({ ...feeRates, taxa_gateway_cartao_pct: v / 100 });
                     }}
                   />
+                </div>
+                <div className="field">
+                  <label>Taxa do Pix</label>
+                  <input
+                    defaultValue={`${(feeRates.taxa_gateway_pix_pct * 100).toFixed(2)}%`}
+                    onBlur={(e) => {
+                      const v = parsePercent(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, taxa_gateway_pix_pct: v / 100 });
+                    }}
+                  />
+                </div>
+                <div className="field">
+                  <label>Taxa fixa do Pix</label>
+                  <input
+                    defaultValue={money(feeRates.taxa_gateway_pix_fixo)}
+                    onBlur={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, taxa_gateway_pix_fixo: v });
+                    }}
+                  />
+                  <div className="suffix">custo fixo por pedido pago via Pix</div>
                 </div>
                 <div className="field">
                   <label>Imposto (Simples)</label>

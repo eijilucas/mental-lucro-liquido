@@ -84,6 +84,14 @@ interface ShopifyOrder {
   created_at: string;
   line_items: ShopifyLineItem[];
   discount_codes?: ShopifyDiscountCode[];
+  payment_gateway_names?: string[];
+}
+
+// Qualquer gateway com "pix" no nome (o app que processa Pix varia por
+// loja) — o resto (cartão, boleto etc.) cai como "cartao".
+function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" {
+  const names = order.payment_gateway_names ?? [];
+  return names.some((n) => /pix/i.test(n)) ? "pix" : "cartao";
 }
 
 interface ShopifyRefundLineItem {
@@ -103,6 +111,7 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
   // tamanho da mesma peça, então o custo é por produto, não por variante.
   const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+  const paymentMethod = detectPaymentMethod(order);
 
   const rows = (order.line_items ?? [])
     .filter((item) => !!item.product_id)
@@ -116,6 +125,7 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
       gross_amount: Number(item.price) * item.quantity,
       sale_date: order.processed_at ?? order.created_at,
       has_coupon: hasCoupon,
+      payment_method: paymentMethod,
     }));
 
   if (rows.length === 0) return;

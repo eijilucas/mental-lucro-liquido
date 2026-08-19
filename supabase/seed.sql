@@ -11,7 +11,9 @@ on conflict (sku) do nothing;
 
 update sale_fee_rates set
   taxa_shopify_pct = 0.0290,
-  taxa_gateway_pct = 0.0349,
+  taxa_gateway_cartao_pct = 0.0500,
+  taxa_gateway_pix_pct = 0.0100,
+  taxa_gateway_pix_fixo = 1.00,
   imposto_pct = 0.0600,
   comissao_influencer_pct = 0.0500,
   desconto_medio_pct = 0

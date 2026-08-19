@@ -88,6 +88,7 @@ interface ShopifyOrder {
   line_items: ShopifyLineItem[];
   refunds: ShopifyRefund[];
   discount_codes?: ShopifyDiscountCode[];
+  payment_gateway_names?: string[];
 }
 
 interface SaleRow {
@@ -100,6 +101,14 @@ interface SaleRow {
   gross_amount: number;
   sale_date: string;
   has_coupon: boolean;
+  payment_method: "pix" | "cartao";
+}
+
+// Qualquer gateway com "pix" no nome (o app que processa Pix varia por
+// loja) — o resto (cartão, boleto etc.) cai como "cartao".
+function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" {
+  const names = order.payment_gateway_names ?? [];
+  return names.some((n) => /pix/i.test(n)) ? "pix" : "cartao";
 }
 
 function extractNextUrl(linkHeader: string | null): string | null {
@@ -157,6 +166,7 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
   }
 
   const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+  const paymentMethod = detectPaymentMethod(order);
 
   return (order.line_items ?? [])
     .filter((item) => !!item.product_id)
@@ -174,6 +184,7 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
         gross_amount,
         sale_date: order.processed_at ?? order.created_at,
         has_coupon: hasCoupon,
+        payment_method: paymentMethod,
       };
     })
     .filter((row) => row.quantity > 0);

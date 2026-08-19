@@ -17,6 +17,7 @@ export interface SaleMarginRow {
   product_line: ProductLine;
   piece_name: string;
   has_coupon: boolean;
+  payment_method: "pix" | "cartao";
 }
 
 export interface MonthlyDreRow {
@@ -41,7 +42,9 @@ export interface OverheadRow {
 export interface FeeRatesRow {
   id: number;
   taxa_shopify_pct: number;
-  taxa_gateway_pct: number;
+  taxa_gateway_cartao_pct: number;
+  taxa_gateway_pix_pct: number;
+  taxa_gateway_pix_fixo: number;
   imposto_pct: number;
   comissao_influencer_pct: number;
   desconto_medio_pct: number;
