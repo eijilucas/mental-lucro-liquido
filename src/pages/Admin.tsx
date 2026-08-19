@@ -899,7 +899,7 @@ export function Admin() {
               <div className="panel-head" style={{ padding: "0 0 16px" }}>
                 <div>
                   <div className="panel-title" style={{ marginBottom: 0 }}>Pix / Cartão — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
-                  <div className="panel-hint">Faturamento bruto e lucro líquido separados por forma de pagamento no período.</div>
+                  <div className="panel-hint">DRE separado por forma de pagamento da venda.</div>
                 </div>
                 <DateRangePicker
                   start={profitRangeStart}
@@ -908,38 +908,16 @@ export function Admin() {
                   onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
                 />
               </div>
-              <div className="allocation-summary">
-                <div className="as-cell">
-                  <div className="as-label">Faturamento via Pix</div>
-                  <div className="as-value accent">
-                    R$ {money(couponRows.filter((r) => r.payment_method === "pix").reduce((sum, r) => sum + r.gross_amount, 0))}
-                  </div>
-                  <div className="panel-hint">
-                    {new Set(couponRows.filter((r) => r.payment_method === "pix").map((r) => r.sale_id)).size} vendas
-                  </div>
-                </div>
-                <div className="as-cell">
-                  <div className="as-label">Faturamento via cartão</div>
-                  <div className="as-value">
-                    R$ {money(couponRows.filter((r) => r.payment_method === "cartao").reduce((sum, r) => sum + r.gross_amount, 0))}
-                  </div>
-                  <div className="panel-hint">
-                    {new Set(couponRows.filter((r) => r.payment_method === "cartao").map((r) => r.sale_id)).size} vendas
-                  </div>
-                </div>
-                <div className="as-cell">
-                  <div className="as-label">Lucro líquido via Pix</div>
-                  <div className="as-value accent">
-                    R$ {money(couponRows.filter((r) => r.payment_method === "pix").reduce((sum, r) => sum + r.net_profit, 0))}
-                  </div>
-                </div>
-                <div className="as-cell">
-                  <div className="as-label">Lucro líquido via cartão</div>
-                  <div className="as-value">
-                    R$ {money(couponRows.filter((r) => r.payment_method === "cartao").reduce((sum, r) => sum + r.net_profit, 0))}
-                  </div>
-                </div>
-              </div>
+              <DreWaterfall
+                title="DRE — Pix"
+                hint={`${new Set(couponRows.filter((r) => r.payment_method === "pix").map((r) => r.sale_id)).size} vendas pagas via Pix`}
+                dre={aggregateDre(couponRows.filter((r) => r.payment_method === "pix"))}
+              />
+              <DreWaterfall
+                title="DRE — Cartão"
+                hint={`${new Set(couponRows.filter((r) => r.payment_method === "cartao").map((r) => r.sale_id)).size} vendas pagas via cartão`}
+                dre={aggregateDre(couponRows.filter((r) => r.payment_method === "cartao"))}
+              />
             </>
           )}
         </>
