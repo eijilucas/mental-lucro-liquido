@@ -27,7 +27,7 @@ import {
   type SaleMarginRow,
 } from "../lib/queries";
 
-type Tab = "sku" | "fees" | "overhead" | "profit" | "coupon";
+type Tab = "sku" | "fees" | "overhead" | "profit" | "coupon" | "payment";
 type PieceMargin = { sku: string; units: number; netProfit: number; profitPerUnit: number; marginPct: number };
 
 function marginClass(pct: number) {
@@ -412,6 +412,10 @@ export function Admin() {
             </div>
             <div className={`tab ${tab === "coupon" ? "active" : ""}`} onClick={() => setTab("coupon")}>
               Cupom
+              <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
+            </div>
+            <div className={`tab ${tab === "payment" ? "active" : ""}`} onClick={() => setTab("payment")}>
+              Pix / Cartão
               <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
             </div>
           </div>
@@ -887,6 +891,43 @@ export function Admin() {
                 hint={`${new Set(couponRows.filter((r) => !r.has_coupon).map((r) => r.sale_id)).size} vendas sem código de desconto`}
                 dre={aggregateDre(couponRows.filter((r) => !r.has_coupon))}
               />
+            </>
+          )}
+
+          {tab === "payment" && (
+            <>
+              <div className="panel-head" style={{ padding: "0 0 16px" }}>
+                <div>
+                  <div className="panel-title" style={{ marginBottom: 0 }}>Pix / Cartão — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
+                  <div className="panel-hint">Faturamento bruto separado por forma de pagamento no período.</div>
+                </div>
+                <DateRangePicker
+                  start={profitRangeStart}
+                  end={profitRangeEnd}
+                  maxDate={todayStr()}
+                  onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                />
+              </div>
+              <div className="allocation-summary">
+                <div className="as-cell">
+                  <div className="as-label">Faturamento via Pix</div>
+                  <div className="as-value accent">
+                    R$ {money(couponRows.filter((r) => r.payment_method === "pix").reduce((sum, r) => sum + r.gross_amount, 0))}
+                  </div>
+                  <div className="panel-hint">
+                    {new Set(couponRows.filter((r) => r.payment_method === "pix").map((r) => r.sale_id)).size} vendas
+                  </div>
+                </div>
+                <div className="as-cell">
+                  <div className="as-label">Faturamento via cartão</div>
+                  <div className="as-value">
+                    R$ {money(couponRows.filter((r) => r.payment_method === "cartao").reduce((sum, r) => sum + r.gross_amount, 0))}
+                  </div>
+                  <div className="panel-hint">
+                    {new Set(couponRows.filter((r) => r.payment_method === "cartao").map((r) => r.sale_id)).size} vendas
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </>
