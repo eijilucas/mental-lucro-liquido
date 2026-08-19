@@ -79,6 +79,7 @@ function emptyProductCost(product_line: ProductCostRow["product_line"], collecti
     product_line,
     collection,
     collection_published_at: null,
+    preco_venda: null,
   };
 }
 
@@ -884,7 +885,9 @@ export function Admin() {
                 <div className="panel-head">
                   <div>
                     <div className="panel-title">Sem venda no período</div>
-                    <div className="panel-hint">Peças cadastradas mas sem nenhuma venda em {rangeLabel(profitRangeStart, profitRangeEnd)} — sem venda, não tem lucro pra calcular. Útil pra achar cadastro duplicado ou peça que ainda não foi lançada.</div>
+                    <div className="panel-hint">
+                      Peças cadastradas mas sem nenhuma venda em {rangeLabel(profitRangeStart, profitRangeEnd)}. Preenche um preço de venda planejado pra ver o lucro estimado — é só projeção (taxa de cartão, sem rateio de marketing/fixo), não lucro real até vender de verdade.
+                    </div>
                   </div>
                 </div>
                 <div className="table-wrap">
@@ -894,21 +897,51 @@ export function Admin() {
                         <th>Peça</th>
                         <th>Linha</th>
                         <th className="num">Custo direto/un.</th>
+                        <th className="num">Preço de venda</th>
+                        <th className="num">Lucro estimado/un.</th>
+                        <th className="num">Margem estimada</th>
                       </tr>
                     </thead>
                     <tbody>
                       {unsold.length === 0 ? (
                         <tr>
-                          <td colSpan={3} style={{ color: "var(--ink-faint)" }}>Toda peça cadastrada teve venda nesse período.</td>
+                          <td colSpan={6} style={{ color: "var(--ink-faint)" }}>Toda peça cadastrada teve venda nesse período.</td>
                         </tr>
                       ) : (
-                        unsold.map((p) => (
-                          <tr key={p.id}>
-                            <td className="sku">{p.product_name}</td>
-                            <td>{p.product_line === "basico" ? "Básico" : "Exclusivo"}</td>
-                            <td className="num">R$ {money(p.tecido + p.estampa + p.costura + p.outros_acabamentos)}</td>
-                          </tr>
-                        ))
+                        unsold.map((p) => {
+                          const directCost = p.tecido + p.estampa + p.costura + p.outros_acabamentos
+                            + (feeRates?.sacolinha ?? 0) + (feeRates?.adesivo ?? 0);
+                          const preco = p.preco_venda;
+                          const saleCostPct = feeRates
+                            ? feeRates.taxa_shopify_pct + feeRates.taxa_gateway_cartao_pct + feeRates.imposto_pct
+                              + feeRates.comissao_influencer_pct + feeRates.desconto_medio_pct
+                            : 0;
+                          const estimatedProfit = preco !== null ? preco - directCost - preco * saleCostPct : null;
+                          const estimatedMarginPct = preco !== null && preco > 0 ? (estimatedProfit! / preco) * 100 : null;
+                          return (
+                            <tr key={p.id}>
+                              <td className="sku">{p.product_name}</td>
+                              <td>{p.product_line === "basico" ? "Básico" : "Exclusivo"}</td>
+                              <td className="num">R$ {money(directCost)}</td>
+                              <td className="num">
+                                <input
+                                  className="cell-input"
+                                  defaultValue={preco !== null ? money(preco) : ""}
+                                  placeholder="0,00"
+                                  onBlur={(e) => handleProductCostBlur(p.id, "preco_venda", e.target.value)}
+                                />
+                              </td>
+                              <td className="num">{estimatedProfit !== null ? `R$ ${money(estimatedProfit)}` : "—"}</td>
+                              <td className="num">
+                                {estimatedMarginPct !== null ? (
+                                  <span className={`margin-pill ${marginClass(estimatedMarginPct)}`}>{estimatedMarginPct.toFixed(1)}%</span>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
