@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { TopBar, AdminBackLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
 import { DateRangePicker } from "../components/DateRangePicker";
@@ -10,6 +10,11 @@ import {
   updateOverheadMethod,
   deleteOverhead,
   insertOverhead,
+  carryForwardFixedOverhead,
+  propagateFixedOverheadAmount,
+  propagateFixedOverheadMethod,
+  markOverheadManuallyEdited,
+  deleteFixedOverheadForward,
   fetchFeeRates,
   updateFeeRates,
   fetchProductCosts,
@@ -237,11 +242,21 @@ export function Admin() {
     };
   }, []);
 
+  const carriedForwardRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
-    fetchMonthlyOverhead(overheadMonth).then((rows) => {
+    (async () => {
+      if (!carriedForwardRef.current) {
+        carriedForwardRef.current = true;
+        try {
+          await carryForwardFixedOverhead();
+        } catch {
+          // não fatal — se falhar, o mês só não herda os fixos automaticamente
+        }
+      }
+      const rows = await fetchMonthlyOverhead(overheadMonth);
       if (!cancelled) setOverhead(rows);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -270,18 +285,38 @@ export function Admin() {
   async function handleAmountBlur(id: string, value: string) {
     const parsed = parseMoney(value);
     if (parsed === null) return;
-    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, amount: parsed } : r)));
+    const row = overhead.find((r) => r.id === id);
+    const isFixed = row ? !row.is_marketing : false;
+    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, amount: parsed, manually_edited: isFixed ? true : r.manually_edited } : r)));
     await updateOverheadAmount(id, parsed);
+    // Gasto fixo: marca esse mês como mexido na mão e propaga o valor novo
+    // pros meses seguintes que ainda estão herdando.
+    if (row && isFixed) {
+      await markOverheadManuallyEdited(id);
+      await propagateFixedOverheadAmount(row.category, row.month, parsed);
+    }
   }
 
   async function handleMethodChange(id: string, method: OverheadRow["allocation_method"]) {
-    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, allocation_method: method } : r)));
+    const row = overhead.find((r) => r.id === id);
+    const isFixed = row ? !row.is_marketing : false;
+    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, allocation_method: method, manually_edited: isFixed ? true : r.manually_edited } : r)));
     await updateOverheadMethod(id, method);
+    if (row && isFixed) {
+      await markOverheadManuallyEdited(id);
+      await propagateFixedOverheadMethod(row.category, row.month, method);
+    }
   }
 
   async function handleDeleteOverhead(id: string) {
+    const row = overhead.find((r) => r.id === id);
     setOverhead((rows) => rows.filter((r) => r.id !== id));
-    await deleteOverhead(id);
+    if (row && !row.is_marketing) {
+      // Gasto fixo: apaga desse mês pra frente, o passado fica no histórico.
+      await deleteFixedOverheadForward(row.category, row.month);
+    } else {
+      await deleteOverhead(id);
+    }
   }
 
   async function handleAddMarketing() {
@@ -298,6 +333,12 @@ export function Admin() {
     const row = await insertOverhead({ category: newFixed.category.trim(), amount, is_marketing: false, allocation_method: newFixed.method, month: overheadMonth });
     setOverhead((rows) => [...rows, row]);
     setNewFixed({ category: "", amount: "0,00", method: "per_unit" });
+    // Herda o gasto novo pros meses seguintes que já existem.
+    try {
+      await carryForwardFixedOverhead();
+    } catch {
+      // não fatal
+    }
   }
 
   async function handleFeeRatesSave() {
@@ -307,6 +348,7 @@ export function Admin() {
       taxa_gateway_cartao_pct: feeRates.taxa_gateway_cartao_pct,
       taxa_gateway_pix_pct: feeRates.taxa_gateway_pix_pct,
       taxa_gateway_pix_fixo: feeRates.taxa_gateway_pix_fixo,
+      taxa_antifraude_fixo: feeRates.taxa_antifraude_fixo,
       imposto_pct: feeRates.imposto_pct,
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
       desconto_medio_pct: feeRates.desconto_medio_pct,
@@ -560,6 +602,7 @@ export function Admin() {
                     <div className="panel-title">Fixos</div>
                     <div className="panel-hint">
                       Custos estruturais do negócio — plataforma, folha, contabilidade — que existem independente de quanto vendeu.
+                      Se repetem sozinhos todo mês. Editar o valor num mês vale desse mês pra frente (meses passados não mudam); apagar tira desse mês em diante.
                     </div>
                   </div>
                 </div>
@@ -706,6 +749,17 @@ export function Admin() {
                     }}
                   />
                   <div className="suffix">custo fixo por pedido pago via Pix</div>
+                </div>
+                <div className="field">
+                  <label>Taxa antifraude (cartão)</label>
+                  <input
+                    defaultValue={money(feeRates.taxa_antifraude_fixo)}
+                    onBlur={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, taxa_antifraude_fixo: v });
+                    }}
+                  />
+                  <div className="suffix">custo fixo por pedido aprovado no cartão (Pix não tem)</div>
                 </div>
                 <div className="field">
                   <label>Imposto (Simples)</label>

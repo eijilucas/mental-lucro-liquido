@@ -37,6 +37,7 @@ export interface OverheadRow {
   amount: number;
   is_marketing: boolean;
   allocation_method: "per_unit" | "per_revenue";
+  manually_edited: boolean;
 }
 
 export interface FeeRatesRow {
@@ -45,6 +46,7 @@ export interface FeeRatesRow {
   taxa_gateway_cartao_pct: number;
   taxa_gateway_pix_pct: number;
   taxa_gateway_pix_fixo: number;
+  taxa_antifraude_fixo: number;
   imposto_pct: number;
   comissao_influencer_pct: number;
   desconto_medio_pct: number;
@@ -156,12 +158,63 @@ export async function fetchLastSyncTime() {
 export async function fetchMonthlyOverhead(month = currentMonthStart()) {
   const { data, error } = await db()
     .from("monthly_overhead")
-    .select("id, month, category, amount, is_marketing, allocation_method")
+    .select("id, month, category, amount, is_marketing, allocation_method, manually_edited")
     .eq("month", month)
     .order("is_marketing", { ascending: false })
     .returns<OverheadRow[]>();
   if (error) throw error;
   return data ?? [];
+}
+
+// Materializa os gastos fixos herdados nos meses que ainda não têm.
+// Idempotente — pode chamar sempre.
+export async function carryForwardFixedOverhead() {
+  const { error } = await db().rpc("carry_forward_fixed_overhead");
+  if (error) throw error;
+}
+
+// Editou um gasto fixo num mês → propaga o valor novo pros meses
+// seguintes que ainda não foram mexidos na mão. Meses anteriores ficam.
+export async function propagateFixedOverheadAmount(category: string, fromMonth: string, amount: number) {
+  const { error } = await db()
+    .from("monthly_overhead")
+    .update({ amount, updated_at: new Date().toISOString() })
+    .eq("is_marketing", false)
+    .eq("category", category)
+    .eq("manually_edited", false)
+    .gt("month", fromMonth);
+  if (error) throw error;
+}
+
+export async function propagateFixedOverheadMethod(
+  category: string,
+  fromMonth: string,
+  allocation_method: OverheadRow["allocation_method"],
+) {
+  const { error } = await db()
+    .from("monthly_overhead")
+    .update({ allocation_method, updated_at: new Date().toISOString() })
+    .eq("is_marketing", false)
+    .eq("category", category)
+    .eq("manually_edited", false)
+    .gt("month", fromMonth);
+  if (error) throw error;
+}
+
+export async function markOverheadManuallyEdited(id: string) {
+  const { error } = await db().from("monthly_overhead").update({ manually_edited: true }).eq("id", id);
+  if (error) throw error;
+}
+
+// Apaga um gasto fixo desse mês pra frente (o passado fica no histórico).
+export async function deleteFixedOverheadForward(category: string, fromMonth: string) {
+  const { error } = await db()
+    .from("monthly_overhead")
+    .delete()
+    .eq("is_marketing", false)
+    .eq("category", category)
+    .gte("month", fromMonth);
+  if (error) throw error;
 }
 
 export async function updateOverheadAmount(id: string, amount: number) {
@@ -189,7 +242,7 @@ export async function insertOverhead(row: {
   const { data, error } = await db()
     .from("monthly_overhead")
     .insert({ ...row, month: row.month ?? currentMonthStart() })
-    .select("id, month, category, amount, is_marketing, allocation_method")
+    .select("id, month, category, amount, is_marketing, allocation_method, manually_edited")
     .single<OverheadRow>();
   if (error) throw error;
   return data;
