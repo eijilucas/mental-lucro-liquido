@@ -26,18 +26,21 @@ alter table sale_revenue
   add column if not exists external_order_id uuid,
   add column if not exists external_item_id uuid;
 
-alter table sale_revenue alter column shopify_order_id drop not null;
-alter table sale_revenue alter column shopify_line_item_id drop not null;
-
 -- PK composta (shopify_order_id, shopify_line_item_id) vira surrogate id.
--- Os dois pares naturais viram unique constraint plana (não parcial): NULL
--- não conflita com NULL no Postgres, então linha shopify (external_* NULL) e
--- linha externa (shopify_* NULL) convivem sem colidir — e o upsert do
--- PostgREST/supabase-js consegue usar como ON CONFLICT (não aceita índice
--- parcial). Mesmo truque de product_costs_variant_id_key.
+-- Tem que largar a PK ANTES de tirar o NOT NULL das colunas (coluna em PK
+-- não aceita drop not null). Os dois pares naturais viram unique constraint
+-- plana (não parcial): NULL não conflita com NULL no Postgres, então linha
+-- shopify (external_* NULL) e linha externa (shopify_* NULL) convivem sem
+-- colidir — e o upsert do PostgREST/supabase-js consegue usar como ON
+-- CONFLICT (não aceita índice parcial). Mesmo truque de
+-- product_costs_variant_id_key.
 alter table sale_revenue drop constraint if exists sale_revenue_pkey;
 alter table sale_revenue add column if not exists id uuid not null default gen_random_uuid();
 alter table sale_revenue add constraint sale_revenue_pkey primary key (id);
+
+alter table sale_revenue alter column shopify_order_id drop not null;
+alter table sale_revenue alter column shopify_line_item_id drop not null;
+
 alter table sale_revenue drop constraint if exists sale_revenue_shopify_key;
 alter table sale_revenue add constraint sale_revenue_shopify_key
   unique (shopify_order_id, shopify_line_item_id);
