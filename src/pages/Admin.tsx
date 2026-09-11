@@ -32,7 +32,7 @@ import {
   type SaleMarginRow,
 } from "../lib/queries";
 
-type Tab = "sku" | "fees" | "overhead" | "profit" | "coupon" | "payment";
+type Tab = "sku" | "fees" | "overhead" | "frete" | "profit" | "coupon" | "payment";
 type PieceMargin = { sku: string; units: number; netProfit: number; profitPerUnit: number; marginPct: number };
 
 function marginClass(pct: number) {
@@ -450,6 +450,10 @@ export function Admin() {
               Gastos do mês
               <span className="count">{monthLabel(overheadMonth)}</span>
             </div>
+            <div className={`tab ${tab === "frete" ? "active" : ""}`} onClick={() => setTab("frete")}>
+              Frete
+              <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
+            </div>
             <div className={`tab ${tab === "profit" ? "active" : ""}`} onClick={() => setTab("profit")}>
               Lucro por peça
               <span className="count">{rangeLabel(profitRangeStart, profitRangeEnd)}</span>
@@ -696,6 +700,51 @@ export function Admin() {
               </div>
             </>
           )}
+
+          {tab === "frete" && (() => {
+            const arrecadado = couponRows.reduce((s, r) => s + r.shipping_revenue, 0);
+            const usado = couponRows.reduce((s, r) => s + r.shipping_cost, 0);
+            const saldo = arrecadado - usado;
+            const pedidos = new Set(couponRows.filter((r) => r.source !== "external").map((r) => r.sale_id)).size;
+            return (
+              <>
+                <div className="panel-head" style={{ padding: "0 0 16px" }}>
+                  <div>
+                    <div className="panel-title" style={{ marginBottom: 0 }}>Gastos de frete — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
+                    <div className="panel-hint">
+                      Frete cobrado do cliente no checkout (valor fixo por estado) menos o frete real pago nas etiquetas
+                      pelo mm-etiquetas. Pedido sem frete real informado ainda entra pelo custo estimado (Taxas de venda).
+                    </div>
+                  </div>
+                  <DateRangePicker
+                    start={profitRangeStart}
+                    end={profitRangeEnd}
+                    maxDate={todayStr()}
+                    onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                  />
+                </div>
+                <div className="allocation-summary">
+                  <div className="as-cell">
+                    <div className="as-label">Valor arrecadado</div>
+                    <div className="as-value accent">R$ {money(arrecadado)}</div>
+                  </div>
+                  <div className="as-cell">
+                    <div className="as-label">Valor usado</div>
+                    <div className="as-value">R$ {money(usado)}</div>
+                  </div>
+                  <div className="as-cell">
+                    <div className="as-label">Saldo final</div>
+                    <div className="as-value" style={{ color: saldo >= 0 ? "var(--positive)" : "var(--negative)" }}>
+                      R$ {money(saldo)}
+                    </div>
+                  </div>
+                </div>
+                <p className="page-sub" style={{ marginTop: 12 }}>
+                  {pedidos} pedido{pedidos === 1 ? "" : "s"} da Shopify no período.
+                </p>
+              </>
+            );
+          })()}
 
           {tab === "fees" && feeRates && (
             <div className="panel">

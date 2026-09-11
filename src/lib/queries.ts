@@ -20,6 +20,7 @@ export interface SaleMarginRow {
   piece_name: string;
   has_coupon: boolean;
   payment_method: "pix" | "cartao";
+  source: "shopify" | "external";
 }
 
 export interface MonthlyDreRow {
