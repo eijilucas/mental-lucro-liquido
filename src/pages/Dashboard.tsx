@@ -38,6 +38,7 @@ interface DashboardData {
   prevDre: DreTotals | null;
   basicoDre: DreTotals;
   exclusivoDre: DreTotals;
+  externalDre: DreTotals;
   lastSync: string | null;
 }
 
@@ -62,7 +63,8 @@ export function Dashboard() {
         const prevDre = prevRows.length > 0 ? aggregateDre(prevRows) : null;
         const basicoDre = aggregateDre(rows.filter((r) => r.product_line === "basico"));
         const exclusivoDre = aggregateDre(rows.filter((r) => r.product_line === "exclusivo"));
-        setData({ dre, prevDre, basicoDre, exclusivoDre, lastSync });
+        const externalDre = aggregateDre(rows.filter((r) => r.source === "external"));
+        setData({ dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
       }
@@ -103,7 +105,7 @@ export function Dashboard() {
     );
   }
 
-  const { dre, prevDre, basicoDre, exclusivoDre, lastSync } = data;
+  const { dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync } = data;
   const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost + dre.shipping_cost - dre.shipping_revenue;
   const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
   const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
@@ -161,6 +163,11 @@ export function Dashboard() {
       <DreWaterfall title="DRE do período — Total" hint="faturamento → lucro líquido · drop básico + exclusivos" dre={dre} />
       <DreWaterfall title="DRE do período — Drop Básico" hint="só as peças marcadas como linha básica" dre={basicoDre} />
       <DreWaterfall title="DRE do período — Exclusivos" hint="só as peças marcadas como linha exclusiva" dre={exclusivoDre} />
+      <DreWaterfall
+        title="DRE do período — Vendas Externas"
+        hint="pedidos do WhatsApp/Discord/Instagram (Vendas Externas), fora do checkout da Shopify"
+        dre={externalDre}
+      />
     </div>
   );
 }
