@@ -16,7 +16,9 @@
 //   npx supabase functions deploy shipping-cost-callback --no-verify-jwt --project-ref vatoeojxpejefxqslgli
 //   npx supabase secrets set SHIPPING_COST_CALLBACK_SECRET=<secret> --project-ref vatoeojxpejefxqslgli
 //
-// Body (valor_frete e diferenca_frete são opcionais e independentes):
+// Body — exatamente uma chave de pedido (shopify_order_id para pedido da loja,
+// external_order_id para venda externa), e valor_frete/diferenca_frete
+// opcionais e independentes entre si:
 //   { "shopify_order_id": "5834923...", "order_number": "3511",
 //     "valor_frete": 22.16,        // preço da etiqueta na compra
 //     "diferenca_frete": 61.92 }   // reajuste de conferência da Melhor Envio (débito), soma acumulada
@@ -52,6 +54,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 interface Body {
   shopify_order_id?: string | number;
+  external_order_id?: string;
   valor_frete?: number | string;
   diferenca_frete?: number | string;
   order_number?: string | number;
@@ -82,8 +85,19 @@ Deno.serve(async (req) => {
     return json({ error: "invalid_json" }, 400);
   }
 
-  const orderId = Number(body.shopify_order_id);
-  if (!Number.isFinite(orderId) || orderId <= 0) return json({ error: "invalid_shopify_order_id" }, 400);
+  // Pedido da Shopify vem por shopify_order_id; venda externa (WhatsApp,
+  // Instagram, Discord) por external_order_id, o mesmo id que o Vendas
+  // Externas manda no register-external-sale. Exatamente um dos dois.
+  const temShopify = body.shopify_order_id != null && body.shopify_order_id !== "";
+  const externalId = body.external_order_id != null ? String(body.external_order_id).trim() : "";
+  if (temShopify === (externalId !== "")) {
+    return json({ error: "informe_shopify_order_id_ou_external_order_id" }, 400);
+  }
+
+  const orderId = temShopify ? Number(body.shopify_order_id) : null;
+  if (temShopify && (!Number.isFinite(orderId!) || orderId! <= 0)) {
+    return json({ error: "invalid_shopify_order_id" }, 400);
+  }
 
   const cost = parseAmount(body.valor_frete);
   const adjustment = parseAmount(body.diferenca_frete);
@@ -92,9 +106,10 @@ Deno.serve(async (req) => {
 
   const now = new Date().toISOString();
   const row: Record<string, unknown> = {
-    shopify_order_id: orderId,
     order_number: body.order_number != null ? String(body.order_number) : null,
   };
+  if (temShopify) row.shopify_order_id = orderId;
+  else row.external_order_id = externalId;
   if (cost !== undefined) {
     row.cost = cost;
     row.cost_synced_at = now;
@@ -105,11 +120,21 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const { error } = await supabase.from("order_shipping").upsert(row, { onConflict: "shopify_order_id" });
+  const { error } = await supabase
+    .from("order_shipping")
+    .upsert(row, { onConflict: temShopify ? "shopify_order_id" : "external_order_id" });
   if (error) {
     console.error("shipping-cost-callback upsert:", error);
     return json({ error: "upsert_failed" }, 500);
   }
 
-  return json({ ok: true, shopify_order_id: orderId, cost: cost ?? null, adjustment: adjustment ?? null });
+  // Devolve o que foi gravado — é assim que quem chama confere se o valor
+  // realmente entrou, em vez de confiar só no status 200.
+  return json({
+    ok: true,
+    shopify_order_id: orderId,
+    external_order_id: temShopify ? null : externalId,
+    cost: cost ?? null,
+    adjustment: adjustment ?? null,
+  });
 });

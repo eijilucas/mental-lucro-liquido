@@ -39,6 +39,10 @@ interface PostBody {
   saleDate: string;
   hasCoupon: boolean;
   items: ItemInput[];
+  // Frete cobrado do cliente nessa venda. Campo novo do lado do Vendas
+  // Externas — pedido antigo não tem, e aí a linha de frete não é tocada
+  // (o custo da etiqueta vem separado, pelo shipping-cost-callback).
+  shippingRevenue?: number | string | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -76,6 +80,13 @@ Deno.serve(async (req) => {
       console.error("register-external-sale DELETE:", error);
       return json({ error: "delete_failed" }, 500);
     }
+
+    const { error: shipErr } = await supabase
+      .from("order_shipping")
+      .delete()
+      .eq("external_order_id", body.externalOrderId);
+    if (shipErr) console.error("register-external-sale DELETE frete:", shipErr);
+
     return json({ ok: true, deleted: data?.length ?? 0 });
   }
 
@@ -139,6 +150,24 @@ Deno.serve(async (req) => {
     if (upErr) {
       console.error("register-external-sale upsert:", upErr);
       return json({ error: "upsert_failed" }, 500);
+    }
+
+    // Frete cobrado. Só grava quando o campo vem no payload — pedido antigo,
+    // de antes de esse campo existir, não deve virar "cobrou zero".
+    const frete = body.shippingRevenue;
+    if (frete !== undefined && frete !== null && frete !== "") {
+      const valor = Number(frete);
+      if (Number.isFinite(valor)) {
+        const { error: shipErr } = await supabase.from("order_shipping").upsert(
+          {
+            external_order_id: body.externalOrderId,
+            revenue: valor,
+            revenue_synced_at: new Date().toISOString(),
+          },
+          { onConflict: "external_order_id" },
+        );
+        if (shipErr) console.error("register-external-sale frete:", shipErr);
+      }
     }
 
     // Stub de custo pra produto ainda não visto (mesma lógica do
