@@ -816,7 +816,15 @@ export function Admin() {
             const usado = couponRows.reduce((s, r) => s + r.shipping_cost, 0);
             const diferenca = couponRows.reduce((s, r) => s + r.shipping_adjustment, 0);
             const saldo = arrecadado - usado - diferenca;
-            const pedidos = new Set(couponRows.filter((r) => r.source !== "external").map((r) => r.sale_id)).size;
+            const shopifyRows = couponRows.filter((r) => r.source !== "external");
+            const pedidos = new Set(shopifyRows.map((r) => r.sale_id)).size;
+            // Pedido sem etiqueta comprada (ou cujo custo o mm-etiquetas ainda
+            // não empurrou) entra com custo zero, porque taxa_frete_estimado
+            // está em 0 de propósito — a gente quer o valor real, não chute.
+            // Sem esse aviso o "Valor usado" parece completo e não é.
+            const semCustoReal = new Set(
+              shopifyRows.filter((r) => !r.has_real_shipping_cost).map((r) => r.sale_id),
+            ).size;
             return (
               <>
                 <div className="panel-head" style={{ padding: "0 0 16px" }}>
@@ -853,6 +861,12 @@ export function Admin() {
                 <p className="page-sub" style={{ marginTop: 12 }}>
                   {pedidos} pedido{pedidos === 1 ? "" : "s"} da Shopify no período.
                 </p>
+                {semCustoReal > 0 && (
+                  <p className="page-sub" style={{ marginTop: 4, color: "var(--negative)" }}>
+                    {semCustoReal} desses {semCustoReal === 1 ? "está" : "estão"} sem o custo real da etiqueta —
+                    {" "}{semCustoReal === 1 ? "entrou" : "entraram"} pagando R$ 0,00, então "Valor usado" e "Saldo final" estão otimistas.
+                  </p>
+                )}
               </>
             );
           })()}

@@ -17,6 +17,9 @@ export interface SaleMarginRow {
   shipping_revenue: number;
   shipping_cost: number;
   shipping_adjustment: number;
+  // false = a etiqueta desse pedido ainda não teve o custo empurrado pelo
+  // mm-etiquetas, então shipping_cost caiu no fallback estimado (hoje zero).
+  has_real_shipping_cost: boolean;
   net_profit: number;
   sale_date: string;
   product_line: ProductLine;
