@@ -423,11 +423,12 @@ export function Admin() {
     ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
     : [[null, exclusivoAll.filter((p) => p.collection === null)]];
 
-  // Lucro por peça só mostra Drop Básico + o drop exclusivo atual — drop
-  // antigo continua no banco (histórico), só não aparece mais no ranking.
+  // Lucro por peça mostra Drop Básico + Vendas Externas + o drop exclusivo
+  // atual — drop antigo continua no banco (histórico), só não aparece mais
+  // no ranking.
   const currentPieceNames = new Set(
     productCosts
-      .filter((p) => p.product_line === "basico" || p.collection === currentCollection?.collection)
+      .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
       .map((p) => p.product_name),
   );
 
