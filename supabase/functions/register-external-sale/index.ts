@@ -154,7 +154,10 @@ Deno.serve(async (req) => {
             {
               shopify_product_id: it.shopifyProductId,
               product_name: it.productName,
-              product_line: it.productLine ?? "basico",
+              // Sempre 'external' — vira linha própria em "Custo de cada peça".
+              // Só cria stub quando o produto ainda não existe (ignoreDuplicates
+              // abaixo), então produto que já vende pela Shopify não é afetado.
+              product_line: "external",
               tecido: 0,
               estampa: 0,
               costura: 0,

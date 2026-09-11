@@ -229,6 +229,7 @@ export function Admin() {
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
   const [newProductExclusivo, setNewProductExclusivo] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("exclusivo"));
+  const [newProductExternal, setNewProductExternal] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("external"));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [feeSaved, setFeeSaved] = useState(false);
@@ -458,7 +459,7 @@ export function Admin() {
             <div className={`tab ${tab === "sku" ? "active" : ""}`} onClick={() => setTab("sku")}>
               Custo de cada peça
               <span className="count">
-                {productCosts.filter((p) => p.product_line === "basico").length +
+                {productCosts.filter((p) => p.product_line === "basico" || p.product_line === "external").length +
                   exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0)}
               </span>
             </div>
@@ -919,6 +920,16 @@ export function Admin() {
                   showAddRow
                 />
               ))}
+              <ProductLinePanel
+                title="Custo de cada peça — Vendas Externas"
+                products={productCosts.filter((p) => p.product_line === "external")}
+                newProduct={newProductExternal}
+                setNewProduct={setNewProductExternal}
+                onCostBlur={handleProductCostBlur}
+                onNameBlur={handleProductNameBlur}
+                onDelete={handleDeleteProduct}
+                onAdd={() => handleAddProduct(newProductExternal, () => setNewProductExternal(emptyProductCost("external")))}
+              />
             </>
           )}
 

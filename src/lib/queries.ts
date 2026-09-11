@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export type ProductLine = "basico" | "exclusivo";
+export type ProductLine = "basico" | "exclusivo" | "external";
 
 export interface SaleMarginRow {
   sale_id: string;
