@@ -489,25 +489,24 @@ export function Admin() {
     ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
     : [[null, exclusivoAll.filter((p) => p.collection === null)]];
 
-  // Drop antigo — o site não vende mais, mas continua saindo por fora
-  // (mesma peça que aparece na box "Venda Externa" do Lucro por peça).
-  // Ganha box própria em "Custo de cada peça" pra dar pra editar o custo.
-  const oldDropProducts = exclusivoAll.filter((p) => p.collection && p.collection !== currentCollection?.collection);
-
-  // Lucro por peça mostra Drop Básico + Vendas Externas + o drop exclusivo
-  // atual — drop antigo continua no banco (histórico), só não aparece mais
-  // no ranking.
-  const currentPieceNames = new Set(
+  // Drop antigo = tem `collection` preenchida e não é a coleção atual —
+  // independe de product_line (peça de drop antigo pode ter sido
+  // reclassificada pra 'external' em "Custo de cada peça" e continua sendo
+  // drop antigo pra essa separação, porque `collection` não muda com isso).
+  const oldDropPieceNames = new Set(
     productCosts
-      .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
+      .filter((p) => p.collection && p.collection !== currentCollection?.collection)
       .map((p) => p.product_name),
   );
 
-  // Peça de drop exclusivo antigo (o site não vende mais) some do ranking
-  // principal e vira uma box à parte, tratada como venda externa — esses
-  // drops só continuam vendendo por fora (WhatsApp/Discord) depois de saírem
-  // do site.
-  const oldDropPieceNames = new Set(oldDropProducts.map((p) => p.product_name));
+  // Lucro por peça mostra Drop Básico + Vendas Externas (sem coleção) + o
+  // drop exclusivo atual — drop antigo vira a box "Venda Externa" à parte.
+  const currentPieceNames = new Set(
+    productCosts
+      .filter((p) => !oldDropPieceNames.has(p.product_name))
+      .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
+      .map((p) => p.product_name),
+  );
 
   if (!supabase) {
     return (
