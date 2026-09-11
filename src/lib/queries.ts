@@ -132,13 +132,16 @@ export async function fetchSkuMarginForRange(start: string, end: string) {
   // margem por peça, mesmo que a venda em si continue registrada.
   const excluded = [/gift\s*card/i, /pingente/i];
 
+  // Lucro por peça = valor do produto − custo da peça, só isso. Sem taxa de
+  // venda, marketing, fixo ou frete rateado — esses variam por mês/pedido e
+  // não dizem nada sobre a peça em si, só distorceriam o ranking.
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
   for (const row of rows) {
     if (excluded.some((re) => re.test(row.piece_name))) continue;
     const entry = bySku.get(row.piece_name) ?? { sku: row.piece_name, units: 0, grossAmount: 0, netProfit: 0 };
     entry.units += row.quantity;
     entry.grossAmount += row.gross_amount;
-    entry.netProfit += row.net_profit;
+    entry.netProfit += row.gross_amount - row.direct_cost;
     bySku.set(row.piece_name, entry);
   }
   return Array.from(bySku.values())
