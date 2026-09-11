@@ -61,8 +61,12 @@ export function Dashboard() {
         if (cancelled) return;
         const dre = aggregateDre(rows);
         const prevDre = prevRows.length > 0 ? aggregateDre(prevRows) : null;
-        const basicoDre = aggregateDre(rows.filter((r) => r.product_line === "basico"));
-        const exclusivoDre = aggregateDre(rows.filter((r) => r.product_line === "exclusivo"));
+        // Os três cards particionam a venda: cada pedido aparece em exatamente
+        // um deles. Básico e Exclusivos são só do site — sem o filtro de
+        // source, venda externa de peça exclusiva caía em "Exclusivos" e dava a
+        // impressão de venda no site num drop já fechado.
+        const basicoDre = aggregateDre(rows.filter((r) => r.source === "shopify" && r.product_line === "basico"));
+        const exclusivoDre = aggregateDre(rows.filter((r) => r.source === "shopify" && r.product_line === "exclusivo"));
         const externalDre = aggregateDre(rows.filter((r) => r.source === "external"));
         setData({ dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync });
       } catch (e) {
@@ -164,12 +168,12 @@ export function Dashboard() {
         </div>
       </div>
 
-      <DreWaterfall title="DRE do período — Total" hint="faturamento → lucro líquido · drop básico + exclusivos" dre={dre} />
-      <DreWaterfall title="DRE do período — Drop Básico" hint="só as peças marcadas como linha básica" dre={basicoDre} />
-      <DreWaterfall title="DRE do período — Exclusivos" hint="só as peças marcadas como linha exclusiva" dre={exclusivoDre} />
+      <DreWaterfall title="DRE do período — Total" hint="faturamento → lucro líquido · site + vendas externas" dre={dre} />
+      <DreWaterfall title="DRE do período — Drop Básico" hint="linha básica vendida no site" dre={basicoDre} />
+      <DreWaterfall title="DRE do período — Exclusivos" hint="linha exclusiva vendida no site" dre={exclusivoDre} />
       <DreWaterfall
         title="DRE do período — Vendas Externas"
-        hint="pedidos do WhatsApp/Discord/Instagram (Vendas Externas), fora do checkout da Shopify"
+        hint="WhatsApp/Discord/Instagram, fora do checkout da Shopify — qualquer linha de produto"
         dre={externalDre}
       />
     </div>
