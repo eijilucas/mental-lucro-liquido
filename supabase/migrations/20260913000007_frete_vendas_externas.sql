@@ -20,7 +20,9 @@
 
 begin;
 
-alter table order_shipping add column if not exists external_order_id text;
+-- uuid, igual a sale_revenue.external_order_id — assim o join é uuid = uuid e
+-- id malformado falha na hora de gravar, em vez de simplesmente nunca casar.
+alter table order_shipping add column if not exists external_order_id uuid;
 
 -- shopify_order_id era a PK; vira apenas única, e passa a aceitar nulo pras
 -- linhas de venda externa.
@@ -110,8 +112,8 @@ components as (
     and oa.line_key = coalesce(sr.shopify_line_item_id::text, sr.external_item_id::text)
   left join order_totals ot on ot.order_key = coalesce(sr.shopify_order_id::text, sr.external_order_id::text)
   left join order_shipping os
-    on coalesce(os.shopify_order_id::text, os.external_order_id)
-     = coalesce(sr.shopify_order_id::text, sr.external_order_id)
+    on coalesce(os.shopify_order_id::text, os.external_order_id::text)
+     = coalesce(sr.shopify_order_id::text, sr.external_order_id::text)
   join sale_fee_rates fr on fr.id = case when sr.source = 'external' then 2 else 1 end
   join sale_fee_rates base on base.id = 1
 )
