@@ -712,11 +712,6 @@ export function Admin() {
                 <div className="panel-head" style={{ padding: "0 0 16px" }}>
                   <div>
                     <div className="panel-title" style={{ marginBottom: 0 }}>Gastos de frete — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
-                    <div className="panel-hint">
-                      Frete cobrado do cliente no checkout (valor fixo por estado) menos o frete real pago nas etiquetas.
-                      "Diferença" são as correções de conferência da Melhor Envio (reajuste de peso/dimensão depois da
-                      postagem). Pedido sem frete real informado ainda entra pelo custo estimado (Taxas de venda).
-                    </div>
                   </div>
                   <DateRangePicker
                     start={profitRangeStart}
