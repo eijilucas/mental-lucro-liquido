@@ -15,6 +15,7 @@ update sale_fee_rates set
   taxa_gateway_pix_pct = 0.0100,
   taxa_gateway_pix_fixo = 1.00,
   taxa_antifraude_fixo = 1.00,
+  taxa_frete_estimado = 0,
   imposto_pct = 0.0600,
   comissao_influencer_pct = 0.0500,
   desconto_medio_pct = 0

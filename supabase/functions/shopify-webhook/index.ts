@@ -78,13 +78,29 @@ interface ShopifyDiscountCode {
   code: string;
 }
 
+interface ShopifyMoneySet {
+  shop_money?: { amount?: string };
+}
+
 interface ShopifyOrder {
   id: number;
+  order_number?: number;
   processed_at?: string;
   created_at: string;
   line_items: ShopifyLineItem[];
   discount_codes?: ShopifyDiscountCode[];
   payment_gateway_names?: string[];
+  total_shipping_price_set?: ShopifyMoneySet;
+  shipping_lines?: { price?: string }[];
+}
+
+// Frete cobrado do cliente no checkout — valor fixo por estado (SP 30, AC 90…).
+// Prefere total_shipping_price_set (já com desconto de frete aplicado); cai pra
+// soma das shipping_lines se a loja não mandar o set.
+function shippingRevenue(order: ShopifyOrder): number {
+  const fromSet = Number(order.total_shipping_price_set?.shop_money?.amount);
+  if (Number.isFinite(fromSet)) return fromSet;
+  return (order.shipping_lines ?? []).reduce((sum, l) => sum + (Number(l.price) || 0), 0);
 }
 
 // Qualquer gateway com "pix" no nome (o app que processa Pix varia por
@@ -134,6 +150,19 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
     .from("sale_revenue")
     .upsert(rows, { onConflict: "shopify_order_id,shopify_line_item_id" });
   if (error) throw error;
+
+  // Frete cobrado do pedido — a coluna `cost` (frete real pago) é preenchida
+  // separado pelo shipping-cost-callback, por isso não vai no payload aqui.
+  const { error: shipError } = await supabase.from("order_shipping").upsert(
+    {
+      shopify_order_id: order.id,
+      order_number: order.order_number != null ? String(order.order_number) : null,
+      revenue: shippingRevenue(order),
+      revenue_synced_at: new Date().toISOString(),
+    },
+    { onConflict: "shopify_order_id" },
+  );
+  if (shipError) throw shipError;
 
   await ensureProductCostStubs(
     supabase,
@@ -185,6 +214,8 @@ async function ensureProductCostStubs(
 async function handleOrderCancelled(supabase: SupabaseClient, order: { id: number }) {
   const { error } = await supabase.from("sale_revenue").delete().eq("shopify_order_id", order.id);
   if (error) throw error;
+  const { error: shipError } = await supabase.from("order_shipping").delete().eq("shopify_order_id", order.id);
+  if (shipError) throw shipError;
 }
 
 async function handleRefundCreate(supabase: SupabaseClient, refund: ShopifyRefund) {

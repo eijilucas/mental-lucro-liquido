@@ -104,7 +104,7 @@ export function Dashboard() {
   }
 
   const { dre, prevDre, basicoDre, exclusivoDre, lastSync } = data;
-  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost;
+  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost + dre.shipping_cost - dre.shipping_revenue;
   const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
   const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
 

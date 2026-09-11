@@ -81,6 +81,7 @@ interface ShopifyDiscountCode {
 
 interface ShopifyOrder {
   id: number;
+  order_number?: number;
   processed_at?: string;
   created_at: string;
   cancelled_at: string | null;
@@ -89,6 +90,15 @@ interface ShopifyOrder {
   refunds: ShopifyRefund[];
   discount_codes?: ShopifyDiscountCode[];
   payment_gateway_names?: string[];
+  total_shipping_price_set?: { shop_money?: { amount?: string } };
+  shipping_lines?: { price?: string }[];
+}
+
+// Frete cobrado do cliente no checkout — valor fixo por estado.
+function shippingRevenue(order: ShopifyOrder): number {
+  const fromSet = Number(order.total_shipping_price_set?.shop_money?.amount);
+  if (Number.isFinite(fromSet)) return fromSet;
+  return (order.shipping_lines ?? []).reduce((sum, l) => sum + (Number(l.price) || 0), 0);
 }
 
 interface SaleRow {
@@ -224,10 +234,19 @@ async function importOrdersFromProfile(supabase: SupabaseClient, profile: StoreP
   const orders = await fetchOrdersSince(profile, accessToken, since);
 
   const rows: SaleRow[] = [];
+  const shipRows: Record<string, unknown>[] = [];
   for (const order of orders) {
     if (order.cancelled_at) continue;
     if (!COUNTABLE_FINANCIAL_STATUS.has(order.financial_status)) continue;
-    rows.push(...buildSaleRows(order));
+    const saleRows = buildSaleRows(order);
+    if (saleRows.length === 0) continue;
+    rows.push(...saleRows);
+    shipRows.push({
+      shopify_order_id: order.id,
+      order_number: order.order_number != null ? String(order.order_number) : null,
+      revenue: shippingRevenue(order),
+      revenue_synced_at: new Date().toISOString(),
+    });
   }
 
   if (rows.length === 0) return 0;
@@ -236,6 +255,12 @@ async function importOrdersFromProfile(supabase: SupabaseClient, profile: StoreP
     .from("sale_revenue")
     .upsert(rows, { onConflict: "shopify_order_id,shopify_line_item_id" });
   if (error) throw error;
+
+  // Frete cobrado — `cost` fica por conta do shipping-cost-callback.
+  const { error: shipError } = await supabase
+    .from("order_shipping")
+    .upsert(shipRows, { onConflict: "shopify_order_id" });
+  if (shipError) throw shipError;
 
   await ensureProductCostStubs(supabase, rows, profile.productLine);
 

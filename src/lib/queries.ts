@@ -12,6 +12,8 @@ export interface SaleMarginRow {
   sale_cost: number;
   marketing_cost: number;
   fixed_cost: number;
+  shipping_revenue: number;
+  shipping_cost: number;
   net_profit: number;
   sale_date: string;
   product_line: ProductLine;
@@ -27,6 +29,8 @@ export interface MonthlyDreRow {
   sale_cost: number;
   marketing_cost: number;
   fixed_cost: number;
+  shipping_revenue: number;
+  shipping_cost: number;
   net_profit: number;
 }
 
@@ -47,6 +51,7 @@ export interface FeeRatesRow {
   taxa_gateway_pix_pct: number;
   taxa_gateway_pix_fixo: number;
   taxa_antifraude_fixo: number;
+  taxa_frete_estimado: number;
   imposto_pct: number;
   comissao_influencer_pct: number;
   desconto_medio_pct: number;

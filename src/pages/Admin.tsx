@@ -349,6 +349,7 @@ export function Admin() {
       taxa_gateway_pix_pct: feeRates.taxa_gateway_pix_pct,
       taxa_gateway_pix_fixo: feeRates.taxa_gateway_pix_fixo,
       taxa_antifraude_fixo: feeRates.taxa_antifraude_fixo,
+      taxa_frete_estimado: feeRates.taxa_frete_estimado,
       imposto_pct: feeRates.imposto_pct,
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
       desconto_medio_pct: feeRates.desconto_medio_pct,
@@ -760,6 +761,17 @@ export function Admin() {
                     }}
                   />
                   <div className="suffix">custo fixo por pedido aprovado no cartão (Pix não tem)</div>
+                </div>
+                <div className="field">
+                  <label>Frete — custo estimado</label>
+                  <input
+                    defaultValue={money(feeRates.taxa_frete_estimado)}
+                    onBlur={(e) => {
+                      const v = parseMoney(e.target.value);
+                      if (v !== null) setFeeRates({ ...feeRates, taxa_frete_estimado: v });
+                    }}
+                  />
+                  <div className="suffix">usado só enquanto o mm-etiquetas não informa o frete real do pedido</div>
                 </div>
                 <div className="field">
                   <label>Imposto (Simples)</label>

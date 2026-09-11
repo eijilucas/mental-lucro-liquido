@@ -10,6 +10,8 @@ export interface DreTotals {
   sale_cost: number;
   marketing_cost: number;
   fixed_cost: number;
+  shipping_revenue: number;
+  shipping_cost: number;
   net_profit: number;
 }
 
@@ -21,9 +23,11 @@ export function aggregateDre(rows: SaleMarginRow[]): DreTotals {
       sale_cost: acc.sale_cost + r.sale_cost,
       marketing_cost: acc.marketing_cost + r.marketing_cost,
       fixed_cost: acc.fixed_cost + r.fixed_cost,
+      shipping_revenue: acc.shipping_revenue + r.shipping_revenue,
+      shipping_cost: acc.shipping_cost + r.shipping_cost,
       net_profit: acc.net_profit + r.net_profit,
     }),
-    { gross_revenue: 0, direct_cost: 0, sale_cost: 0, marketing_cost: 0, fixed_cost: 0, net_profit: 0 },
+    { gross_revenue: 0, direct_cost: 0, sale_cost: 0, marketing_cost: 0, fixed_cost: 0, shipping_revenue: 0, shipping_cost: 0, net_profit: 0 },
   );
 }
 
@@ -31,6 +35,8 @@ export function DreWaterfall({ title, hint, dre }: { title: string; hint: string
   const afterDirect = dre.gross_revenue - dre.direct_cost;
   const afterSaleCost = afterDirect - dre.sale_cost;
   const afterMarketing = afterSaleCost - dre.marketing_cost;
+  const afterFixed = afterMarketing - dre.fixed_cost;
+  const shippingResult = dre.shipping_revenue - dre.shipping_cost;
 
   function waterfallWidth(value: number) {
     return `${dre.gross_revenue > 0 ? ((value / dre.gross_revenue) * 100).toFixed(1) : 0}%`;
@@ -79,6 +85,17 @@ export function DreWaterfall({ title, hint, dre }: { title: string; hint: string
               <div className="wf-value">R$ {moneyCents(afterMarketing)}</div>
             </div>
             <div className="wf-cut">− R$ {moneyCents(dre.fixed_cost)} · fixos rateados</div>
+            <div className="wf-row">
+              <div className="wf-label">Após fixos</div>
+              <div className="wf-track">
+                <div className="wf-fill" style={{ width: waterfallWidth(afterFixed) }} />
+              </div>
+              <div className="wf-value">R$ {moneyCents(afterFixed)}</div>
+            </div>
+            <div className="wf-cut">
+              {shippingResult >= 0 ? "+" : "−"} R$ {moneyCents(Math.abs(shippingResult))} · resultado do frete
+              {" "}(cobrado R$ {moneyCents(dre.shipping_revenue)} − pago R$ {moneyCents(dre.shipping_cost)})
+            </div>
             <div className="wf-row">
               <div className="wf-label strong">Lucro líquido</div>
               <div className="wf-track">
