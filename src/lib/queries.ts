@@ -7,7 +7,9 @@ export interface SaleMarginRow {
   product_sku: string | null;
   product_name: string;
   quantity: number;
+  // Líquido de cupom — a view já subtrai o desconto do preço de tabela.
   gross_amount: number;
+  discount_amount: number;
   direct_cost: number;
   sale_cost: number;
   marketing_cost: number;
@@ -27,6 +29,7 @@ export interface SaleMarginRow {
 export interface MonthlyDreRow {
   month: string;
   gross_revenue: number;
+  discount_amount: number;
   direct_cost: number;
   sale_cost: number;
   marketing_cost: number;
@@ -57,7 +60,6 @@ export interface FeeRatesRow {
   taxa_frete_estimado: number;
   imposto_pct: number;
   comissao_influencer_pct: number;
-  desconto_medio_pct: number;
   sacolinha: number;
   adesivo: number;
 }
@@ -134,7 +136,9 @@ export async function fetchSkuMarginForRange(start: string, end: string) {
 
   // Lucro por peça = valor do produto − custo da peça, só isso. Sem taxa de
   // venda, marketing, fixo ou frete rateado — esses variam por mês/pedido e
-  // não dizem nada sobre a peça em si, só distorceriam o ranking.
+  // não dizem nada sobre a peça em si, só distorceriam o ranking. O valor do
+  // produto já vem líquido de cupom da view, então peça vendida com desconto
+  // aparece com a margem que realmente teve.
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
   for (const row of rows) {
     if (excluded.some((re) => re.test(row.piece_name))) continue;

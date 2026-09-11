@@ -211,6 +211,7 @@ function PieceMarginTable({
   sort,
   onSort,
   emptyMessage,
+  isCostMissing,
 }: {
   title: string;
   hint: string;
@@ -218,6 +219,7 @@ function PieceMarginTable({
   sort: { field: keyof PieceMargin; dir: "asc" | "desc" };
   onSort: (field: keyof PieceMargin) => void;
   emptyMessage: string;
+  isCostMissing: (pieceName: string) => boolean;
 }) {
   const sorted = [...rows].sort((a, b) => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -253,7 +255,10 @@ function PieceMarginTable({
             ) : (
               sorted.map((row) => (
                 <tr key={row.sku}>
-                  <td className="sku">{row.sku}</td>
+                  <td className="sku">
+                    {row.sku}
+                    {isCostMissing(row.sku) && <span className="cost-missing">sem custo</span>}
+                  </td>
                   <td className="num">{row.units}</td>
                   <td className="num">R$ {money(row.netProfit)}</td>
                   <td className="num">R$ {money(row.profitPerUnit)}</td>
@@ -430,7 +435,6 @@ export function Admin() {
       taxa_frete_estimado: feeRates.taxa_frete_estimado,
       imposto_pct: feeRates.imposto_pct,
       comissao_influencer_pct: feeRates.comissao_influencer_pct,
-      desconto_medio_pct: feeRates.desconto_medio_pct,
       sacolinha: feeRates.sacolinha,
       adesivo: feeRates.adesivo,
     });
@@ -507,6 +511,15 @@ export function Admin() {
       .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
       .map((p) => p.product_name),
   );
+
+  // Peça sem custo de produção cadastrado entra no ranking com margem
+  // fictícia (só sacolinha e adesivo contam como custo), então marca na
+  // tabela. Peça que nem tem linha em product_costs cai no mesmo caso —
+  // a venda casa por shopify_product_id e não achou nada.
+  const pieceCostTotals = new Map(
+    productCosts.map((p) => [p.product_name, p.tecido + p.estampa + p.costura + p.outros_acabamentos]),
+  );
+  const isCostMissing = (pieceName: string) => (pieceCostTotals.get(pieceName) ?? 0) === 0;
 
   if (!supabase) {
     return (
@@ -1044,6 +1057,7 @@ export function Admin() {
                   sort={pieceSort}
                   onSort={handlePieceSort}
                   emptyMessage={pieceMargin.length === 0 ? "Nenhuma venda ainda esse mês." : "Nenhuma peça encontrada."}
+                  isCostMissing={isCostMissing}
                 />
                 {oldDropRows.length > 0 && (
                   <PieceMarginTable
@@ -1053,6 +1067,7 @@ export function Admin() {
                     sort={pieceSort}
                     onSort={handlePieceSort}
                     emptyMessage="Nenhuma peça encontrada."
+                    isCostMissing={isCostMissing}
                   />
                 )}
               </>
@@ -1077,7 +1092,7 @@ export function Admin() {
                   <div>
                     <div className="panel-title">Sem venda no período</div>
                     <div className="panel-hint">
-                      Peças cadastradas mas sem nenhuma venda em {rangeLabel(profitRangeStart, profitRangeEnd)}. Preenche um preço de venda planejado pra ver o lucro estimado — é só projeção (taxa de cartão, sem rateio de marketing/fixo), não lucro real até vender de verdade.
+                      Peças cadastradas mas sem nenhuma venda em {rangeLabel(profitRangeStart, profitRangeEnd)}. Preenche um preço de venda planejado pra ver o lucro estimado — é projeção no pior caso (cartão e com cupom, sem rateio de marketing/fixo), não lucro real até vender de verdade.
                     </div>
                   </div>
                 </div>
@@ -1105,7 +1120,7 @@ export function Admin() {
                           const preco = p.preco_venda;
                           const saleCostPct = feeRates
                             ? feeRates.taxa_shopify_pct + feeRates.taxa_gateway_cartao_pct + feeRates.imposto_pct
-                              + feeRates.comissao_influencer_pct + feeRates.desconto_medio_pct
+                              + feeRates.comissao_influencer_pct
                             : 0;
                           const estimatedProfit = preco !== null ? preco - directCost - preco * saleCostPct : null;
                           const estimatedMarginPct = preco !== null && preco > 0 ? (estimatedProfit! / preco) * 100 : null;

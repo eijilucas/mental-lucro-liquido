@@ -106,7 +106,11 @@ export function Dashboard() {
   }
 
   const { dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync } = data;
-  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost + dre.shipping_cost - dre.shipping_revenue;
+  // Tem que fechar com o lucro líquido: faturamento − custos totais = lucro.
+  // Inclui a diferença de frete (conferência da Melhor Envio), senão a conta
+  // não bate com o net_profit da view.
+  const totalCost = dre.direct_cost + dre.sale_cost + dre.marketing_cost + dre.fixed_cost
+    + dre.shipping_cost + dre.shipping_adjustment - dre.shipping_revenue;
   const netMarginPct = dre.gross_revenue > 0 ? (dre.net_profit / dre.gross_revenue) * 100 : 0;
   const grossDeltaPct = prevDre && prevDre.gross_revenue > 0 ? ((dre.gross_revenue - prevDre.gross_revenue) / prevDre.gross_revenue) * 100 : null;
 
