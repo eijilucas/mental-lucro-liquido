@@ -146,18 +146,18 @@ export async function fetchSkuMarginForRange(start: string, end: string) {
   // margem por peça, mesmo que a venda em si continue registrada.
   const excluded = [/gift\s*card/i, /pingente/i];
 
-  // Lucro por peça = valor do produto − custo da peça, só isso. Sem taxa de
-  // venda, marketing, fixo ou frete rateado — esses variam por mês/pedido e
-  // não dizem nada sobre a peça em si, só distorceriam o ranking. O valor do
-  // produto já vem líquido de cupom da view, então peça vendida com desconto
-  // aparece com a margem que realmente teve.
+  // Lucro por peça é o lucro líquido de verdade: já vem da view com custo da
+  // peça, taxas de venda, marketing e fixo rateados e o resultado do frete.
+  // Chegou a ficar só como "faturamento − custo da peça" por um tempo, mas
+  // aquilo dava margem de 80% e era lido como margem real — voltou a ser a
+  // conta completa, a mesma que o Dashboard mostra.
   const bySku = new Map<string, { sku: string; units: number; grossAmount: number; netProfit: number }>();
   for (const row of rows) {
     if (excluded.some((re) => re.test(row.piece_name))) continue;
     const entry = bySku.get(row.piece_name) ?? { sku: row.piece_name, units: 0, grossAmount: 0, netProfit: 0 };
     entry.units += row.quantity;
     entry.grossAmount += row.gross_amount;
-    entry.netProfit += row.gross_amount - row.direct_cost;
+    entry.netProfit += row.net_profit;
     bySku.set(row.piece_name, entry);
   }
   return Array.from(bySku.values())

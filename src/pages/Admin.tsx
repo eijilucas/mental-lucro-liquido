@@ -1105,7 +1105,10 @@ export function Admin() {
                 <div className="panel-head" style={{ padding: "0 0 16px" }}>
                   <div>
                     <div className="panel-title" style={{ marginBottom: 0 }}>Lucro por peça — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
-                    <div className="panel-hint">Peças vendidas no período — clique no cabeçalho pra ordenar.</div>
+                    <div className="panel-hint">
+                      Peças vendidas no período — clique no cabeçalho pra ordenar. O lucro aqui é o líquido:
+                      já desconta custo da peça, taxas de venda, marketing e fixos rateados e o resultado do frete.
+                    </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <DateRangePicker
