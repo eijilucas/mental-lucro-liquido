@@ -538,8 +538,7 @@ export function Admin() {
               Custo de cada peça
               <span className="count">
                 {productCosts.filter((p) => p.product_line === "basico" || p.product_line === "external").length +
-                  exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0) +
-                  oldDropProducts.length}
+                  exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0)}
               </span>
             </div>
             <div className={`tab ${tab === "fees" ? "active" : ""}`} onClick={() => setTab("fees")}>
@@ -1009,19 +1008,6 @@ export function Admin() {
                 onDelete={handleDeleteProduct}
                 onAdd={() => handleAddProduct(newProductExternal, () => setNewProductExternal(emptyProductCost("external")))}
               />
-              {oldDropProducts.length > 0 && (
-                <ProductLinePanel
-                  title="Custo de cada peça — Drops Antigos"
-                  products={oldDropProducts}
-                  newProduct={newProductExternal}
-                  setNewProduct={setNewProductExternal}
-                  onCostBlur={handleProductCostBlur}
-                  onNameBlur={handleProductNameBlur}
-                  onDelete={handleDeleteProduct}
-                  onAdd={() => {}}
-                  showAddRow={false}
-                />
-              )}
             </>
           )}
 
