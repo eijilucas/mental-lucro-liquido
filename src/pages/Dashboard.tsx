@@ -36,9 +36,10 @@ function timeAgo(iso: string) {
 interface DashboardData {
   dre: DreTotals;
   prevDre: DreTotals | null;
-  basicoDre: DreTotals;
-  exclusivoDre: DreTotals;
-  externalDre: DreTotals;
+  // null = não teve venda dessa origem no período, e aí o card nem aparece.
+  basicoDre: DreTotals | null;
+  exclusivoDre: DreTotals | null;
+  externalDre: DreTotals | null;
   lastSync: string | null;
 }
 
@@ -65,9 +66,10 @@ export function Dashboard() {
         // um deles. Básico e Exclusivos são só do site — sem o filtro de
         // source, venda externa de peça exclusiva caía em "Exclusivos" e dava a
         // impressão de venda no site num drop já fechado.
-        const basicoDre = aggregateDre(rows.filter((r) => r.source === "shopify" && r.product_line === "basico"));
-        const exclusivoDre = aggregateDre(rows.filter((r) => r.source === "shopify" && r.product_line === "exclusivo"));
-        const externalDre = aggregateDre(rows.filter((r) => r.source === "external"));
+        const dreOf = (rs: typeof rows) => (rs.length > 0 ? aggregateDre(rs) : null);
+        const basicoDre = dreOf(rows.filter((r) => r.source === "shopify" && r.product_line === "basico"));
+        const exclusivoDre = dreOf(rows.filter((r) => r.source === "shopify" && r.product_line === "exclusivo"));
+        const externalDre = dreOf(rows.filter((r) => r.source === "external"));
         setData({ dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync });
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar dados.");
@@ -168,14 +170,19 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* O Total aparece sempre — é ele que diz "nenhuma venda no período"
+          quando não vendeu nada. Os cards da quebra só aparecem se tiveram
+          venda: card vazio não conta nada e só empurra o resto pra baixo. */}
       <DreWaterfall title="DRE do período — Total" hint="faturamento → lucro líquido · site + vendas externas" dre={dre} />
-      <DreWaterfall title="DRE do período — Drop Básico" hint="linha básica vendida no site" dre={basicoDre} />
-      <DreWaterfall title="DRE do período — Exclusivos" hint="linha exclusiva vendida no site" dre={exclusivoDre} />
-      <DreWaterfall
-        title="DRE do período — Vendas Externas"
-        hint="WhatsApp/Discord/Instagram, fora do checkout da Shopify — qualquer linha de produto"
-        dre={externalDre}
-      />
+      {basicoDre && <DreWaterfall title="DRE do período — Drop Básico" hint="linha básica vendida no site" dre={basicoDre} />}
+      {exclusivoDre && <DreWaterfall title="DRE do período — Exclusivos" hint="linha exclusiva vendida no site" dre={exclusivoDre} />}
+      {externalDre && (
+        <DreWaterfall
+          title="DRE do período — Vendas Externas"
+          hint="WhatsApp/Discord/Instagram, fora do checkout da Shopify — qualquer linha de produto"
+          dre={externalDre}
+        />
+      )}
     </div>
   );
 }
