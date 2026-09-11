@@ -704,7 +704,8 @@ export function Admin() {
           {tab === "frete" && (() => {
             const arrecadado = couponRows.reduce((s, r) => s + r.shipping_revenue, 0);
             const usado = couponRows.reduce((s, r) => s + r.shipping_cost, 0);
-            const saldo = arrecadado - usado;
+            const diferenca = couponRows.reduce((s, r) => s + r.shipping_adjustment, 0);
+            const saldo = arrecadado - usado - diferenca;
             const pedidos = new Set(couponRows.filter((r) => r.source !== "external").map((r) => r.sale_id)).size;
             return (
               <>
@@ -712,8 +713,9 @@ export function Admin() {
                   <div>
                     <div className="panel-title" style={{ marginBottom: 0 }}>Gastos de frete — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
                     <div className="panel-hint">
-                      Frete cobrado do cliente no checkout (valor fixo por estado) menos o frete real pago nas etiquetas
-                      pelo mm-etiquetas. Pedido sem frete real informado ainda entra pelo custo estimado (Taxas de venda).
+                      Frete cobrado do cliente no checkout (valor fixo por estado) menos o frete real pago nas etiquetas.
+                      "Diferença" são as correções de conferência da Melhor Envio (reajuste de peso/dimensão depois da
+                      postagem). Pedido sem frete real informado ainda entra pelo custo estimado (Taxas de venda).
                     </div>
                   </div>
                   <DateRangePicker
@@ -731,6 +733,10 @@ export function Admin() {
                   <div className="as-cell">
                     <div className="as-label">Valor usado</div>
                     <div className="as-value">R$ {money(usado)}</div>
+                  </div>
+                  <div className="as-cell">
+                    <div className="as-label">Diferença</div>
+                    <div className="as-value" style={{ color: diferenca > 0 ? "var(--negative)" : undefined }}>R$ {money(diferenca)}</div>
                   </div>
                   <div className="as-cell">
                     <div className="as-label">Saldo final</div>

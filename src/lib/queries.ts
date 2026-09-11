@@ -14,6 +14,7 @@ export interface SaleMarginRow {
   fixed_cost: number;
   shipping_revenue: number;
   shipping_cost: number;
+  shipping_adjustment: number;
   net_profit: number;
   sale_date: string;
   product_line: ProductLine;
@@ -32,6 +33,7 @@ export interface MonthlyDreRow {
   fixed_cost: number;
   shipping_revenue: number;
   shipping_cost: number;
+  shipping_adjustment: number;
   net_profit: number;
 }
 

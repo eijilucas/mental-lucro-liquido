@@ -12,6 +12,7 @@ export interface DreTotals {
   fixed_cost: number;
   shipping_revenue: number;
   shipping_cost: number;
+  shipping_adjustment: number;
   net_profit: number;
 }
 
@@ -25,9 +26,10 @@ export function aggregateDre(rows: SaleMarginRow[]): DreTotals {
       fixed_cost: acc.fixed_cost + r.fixed_cost,
       shipping_revenue: acc.shipping_revenue + r.shipping_revenue,
       shipping_cost: acc.shipping_cost + r.shipping_cost,
+      shipping_adjustment: acc.shipping_adjustment + r.shipping_adjustment,
       net_profit: acc.net_profit + r.net_profit,
     }),
-    { gross_revenue: 0, direct_cost: 0, sale_cost: 0, marketing_cost: 0, fixed_cost: 0, shipping_revenue: 0, shipping_cost: 0, net_profit: 0 },
+    { gross_revenue: 0, direct_cost: 0, sale_cost: 0, marketing_cost: 0, fixed_cost: 0, shipping_revenue: 0, shipping_cost: 0, shipping_adjustment: 0, net_profit: 0 },
   );
 }
 
@@ -36,7 +38,7 @@ export function DreWaterfall({ title, hint, dre }: { title: string; hint: string
   const afterSaleCost = afterDirect - dre.sale_cost;
   const afterMarketing = afterSaleCost - dre.marketing_cost;
   const afterFixed = afterMarketing - dre.fixed_cost;
-  const shippingResult = dre.shipping_revenue - dre.shipping_cost;
+  const shippingResult = dre.shipping_revenue - dre.shipping_cost - dre.shipping_adjustment;
 
   function waterfallWidth(value: number) {
     return `${dre.gross_revenue > 0 ? ((value / dre.gross_revenue) * 100).toFixed(1) : 0}%`;
@@ -94,7 +96,8 @@ export function DreWaterfall({ title, hint, dre }: { title: string; hint: string
             </div>
             <div className="wf-cut">
               {shippingResult >= 0 ? "+" : "−"} R$ {moneyCents(Math.abs(shippingResult))} · resultado do frete
-              {" "}(cobrado R$ {moneyCents(dre.shipping_revenue)} − pago R$ {moneyCents(dre.shipping_cost)})
+              {" "}(cobrado R$ {moneyCents(dre.shipping_revenue)} − pago R$ {moneyCents(dre.shipping_cost)}
+              {dre.shipping_adjustment !== 0 && <> − diferença R$ {moneyCents(dre.shipping_adjustment)}</>})
             </div>
             <div className="wf-row">
               <div className="wf-label strong">Lucro líquido</div>
