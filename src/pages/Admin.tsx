@@ -204,6 +204,72 @@ function ProductLinePanel({
   );
 }
 
+function PieceMarginTable({
+  title,
+  hint,
+  rows,
+  sort,
+  onSort,
+  emptyMessage,
+}: {
+  title: string;
+  hint: string;
+  rows: PieceMargin[];
+  sort: { field: keyof PieceMargin; dir: "asc" | "desc" };
+  onSort: (field: keyof PieceMargin) => void;
+  emptyMessage: string;
+}) {
+  const sorted = [...rows].sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const field = sort.field;
+    if (field === "sku") return a.sku.localeCompare(b.sku) * dir;
+    return (a[field] - b[field]) * dir;
+  });
+  const arrow = (field: keyof PieceMargin) => (sort.field === field ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title">{title}</div>
+          <div className="panel-hint">{hint}</div>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th className="sortable" onClick={() => onSort("sku")}>Peça{arrow("sku")}</th>
+              <th className="num sortable" onClick={() => onSort("units")}>Unid.{arrow("units")}</th>
+              <th className="num sortable" onClick={() => onSort("netProfit")}>Lucro{arrow("netProfit")}</th>
+              <th className="num sortable" onClick={() => onSort("profitPerUnit")}>Lucro/un.{arrow("profitPerUnit")}</th>
+              <th className="num sortable" onClick={() => onSort("marginPct")}>Margem{arrow("marginPct")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ color: "var(--ink-faint)" }}>{emptyMessage}</td>
+              </tr>
+            ) : (
+              sorted.map((row) => (
+                <tr key={row.sku}>
+                  <td className="sku">{row.sku}</td>
+                  <td className="num">{row.units}</td>
+                  <td className="num">R$ {money(row.netProfit)}</td>
+                  <td className="num">R$ {money(row.profitPerUnit)}</td>
+                  <td className="num">
+                    <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function Admin() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -429,6 +495,16 @@ export function Admin() {
   const currentPieceNames = new Set(
     productCosts
       .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
+      .map((p) => p.product_name),
+  );
+
+  // Peça de drop exclusivo antigo (o site não vende mais) some do ranking
+  // principal e vira uma box à parte, tratada como venda externa — esses
+  // drops só continuam vendendo por fora (WhatsApp/Discord) depois de saírem
+  // do site.
+  const oldDropPieceNames = new Set(
+    productCosts
+      .filter((p) => p.product_line === "exclusivo" && p.collection && p.collection !== currentCollection?.collection)
       .map((p) => p.product_name),
   );
 
@@ -934,87 +1010,54 @@ export function Admin() {
             </>
           )}
 
-          {tab === "profit" && (
-            <div className="panel">
-              <div className="panel-head">
-                <div>
-                  <div className="panel-title">Lucro por peça — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
-                  <div className="panel-hint">Peças vendidas no período — clique no cabeçalho pra ordenar.</div>
+          {tab === "profit" && (() => {
+            const bySearch = (row: PieceMargin) => row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase());
+            const mainRows = pieceMargin.filter((row) => currentPieceNames.has(row.sku)).filter(bySearch);
+            const oldDropRows = pieceMargin.filter((row) => oldDropPieceNames.has(row.sku)).filter(bySearch);
+            return (
+              <>
+                <div className="panel-head" style={{ padding: "0 0 16px" }}>
+                  <div>
+                    <div className="panel-title" style={{ marginBottom: 0 }}>Lucro por peça — {rangeLabel(profitRangeStart, profitRangeEnd)}</div>
+                    <div className="panel-hint">Peças vendidas no período — clique no cabeçalho pra ordenar.</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <DateRangePicker
+                      start={profitRangeStart}
+                      end={profitRangeEnd}
+                      maxDate={todayStr()}
+                      onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                    />
+                    <input
+                      className="cell-text"
+                      placeholder="Buscar peça..."
+                      value={pieceSearch}
+                      onChange={(e) => setPieceSearch(e.target.value)}
+                      style={{ width: 160 }}
+                    />
+                  </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <DateRangePicker
-                    start={profitRangeStart}
-                    end={profitRangeEnd}
-                    maxDate={todayStr()}
-                    onChange={(s, e) => { setProfitRangeStart(s); setProfitRangeEnd(e); }}
+                <PieceMarginTable
+                  title="Lucro por peça"
+                  hint="Drop Básico, Vendas Externas e o drop exclusivo atual."
+                  rows={mainRows}
+                  sort={pieceSort}
+                  onSort={handlePieceSort}
+                  emptyMessage={pieceMargin.length === 0 ? "Nenhuma venda ainda esse mês." : "Nenhuma peça encontrada."}
+                />
+                {oldDropRows.length > 0 && (
+                  <PieceMarginTable
+                    title="Venda Externa"
+                    hint="Peças de drops exclusivos antigos — o site não vende mais, só continuam saindo por fora."
+                    rows={oldDropRows}
+                    sort={pieceSort}
+                    onSort={handlePieceSort}
+                    emptyMessage="Nenhuma peça encontrada."
                   />
-                  <input
-                    className="cell-text"
-                    placeholder="Buscar peça..."
-                    value={pieceSearch}
-                    onChange={(e) => setPieceSearch(e.target.value)}
-                    style={{ width: 160 }}
-                  />
-                </div>
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="sortable" onClick={() => handlePieceSort("sku")}>
-                        Peça{pieceSort.field === "sku" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                      <th className="num sortable" onClick={() => handlePieceSort("units")}>
-                        Unid.{pieceSort.field === "units" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                      <th className="num sortable" onClick={() => handlePieceSort("netProfit")}>
-                        Lucro{pieceSort.field === "netProfit" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                      <th className="num sortable" onClick={() => handlePieceSort("profitPerUnit")}>
-                        Lucro/un.{pieceSort.field === "profitPerUnit" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                      <th className="num sortable" onClick={() => handlePieceSort("marginPct")}>
-                        Margem{pieceSort.field === "marginPct" ? (pieceSort.dir === "asc" ? " ▲" : " ▼") : ""}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const filtered = pieceMargin
-                        .filter((row) => currentPieceNames.has(row.sku))
-                        .filter((row) => row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase()))
-                        .sort((a, b) => {
-                          const dir = pieceSort.dir === "asc" ? 1 : -1;
-                          const field = pieceSort.field;
-                          if (field === "sku") return a.sku.localeCompare(b.sku) * dir;
-                          return (a[field] - b[field]) * dir;
-                        });
-                      if (filtered.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={5} style={{ color: "var(--ink-faint)" }}>
-                              {pieceMargin.length === 0 ? "Nenhuma venda ainda esse mês." : "Nenhuma peça encontrada."}
-                            </td>
-                          </tr>
-                        );
-                      }
-                      return filtered.map((row) => (
-                        <tr key={row.sku}>
-                          <td className="sku">{row.sku}</td>
-                          <td className="num">{row.units}</td>
-                          <td className="num">R$ {money(row.netProfit)}</td>
-                          <td className="num">R$ {money(row.profitPerUnit)}</td>
-                          <td className="num">
-                            <span className={`margin-pill ${marginClass(row.marginPct)}`}>{row.marginPct.toFixed(1)}%</span>
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                )}
+              </>
+            );
+          })()}
 
           {tab === "profit" && (() => {
             const excluded = [/gift\s*card/i, /pingente/i];
