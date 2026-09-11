@@ -489,6 +489,11 @@ export function Admin() {
     ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
     : [[null, exclusivoAll.filter((p) => p.collection === null)]];
 
+  // Drop antigo — o site não vende mais, mas continua saindo por fora
+  // (mesma peça que aparece na box "Venda Externa" do Lucro por peça).
+  // Ganha box própria em "Custo de cada peça" pra dar pra editar o custo.
+  const oldDropProducts = exclusivoAll.filter((p) => p.collection && p.collection !== currentCollection?.collection);
+
   // Lucro por peça mostra Drop Básico + Vendas Externas + o drop exclusivo
   // atual — drop antigo continua no banco (histórico), só não aparece mais
   // no ranking.
@@ -502,11 +507,7 @@ export function Admin() {
   // principal e vira uma box à parte, tratada como venda externa — esses
   // drops só continuam vendendo por fora (WhatsApp/Discord) depois de saírem
   // do site.
-  const oldDropPieceNames = new Set(
-    productCosts
-      .filter((p) => p.product_line === "exclusivo" && p.collection && p.collection !== currentCollection?.collection)
-      .map((p) => p.product_name),
-  );
+  const oldDropPieceNames = new Set(oldDropProducts.map((p) => p.product_name));
 
   if (!supabase) {
     return (
@@ -537,7 +538,8 @@ export function Admin() {
               Custo de cada peça
               <span className="count">
                 {productCosts.filter((p) => p.product_line === "basico" || p.product_line === "external").length +
-                  exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0)}
+                  exclusivoGroups.reduce((sum, [, products]) => sum + products.length, 0) +
+                  oldDropProducts.length}
               </span>
             </div>
             <div className={`tab ${tab === "fees" ? "active" : ""}`} onClick={() => setTab("fees")}>
@@ -1007,6 +1009,19 @@ export function Admin() {
                 onDelete={handleDeleteProduct}
                 onAdd={() => handleAddProduct(newProductExternal, () => setNewProductExternal(emptyProductCost("external")))}
               />
+              {oldDropProducts.length > 0 && (
+                <ProductLinePanel
+                  title="Custo de cada peça — Venda Externa (drops antigos)"
+                  products={oldDropProducts}
+                  newProduct={newProductExternal}
+                  setNewProduct={setNewProductExternal}
+                  onCostBlur={handleProductCostBlur}
+                  onNameBlur={handleProductNameBlur}
+                  onDelete={handleDeleteProduct}
+                  onAdd={() => {}}
+                  showAddRow={false}
+                />
+              )}
             </>
           )}
 
