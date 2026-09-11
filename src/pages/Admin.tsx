@@ -1011,7 +1011,7 @@ export function Admin() {
               />
               {oldDropProducts.length > 0 && (
                 <ProductLinePanel
-                  title="Custo de cada peça — Venda Externa (drops antigos)"
+                  title="Custo de cada peça — Drops Antigos"
                   products={oldDropProducts}
                   newProduct={newProductExternal}
                   setNewProduct={setNewProductExternal}
