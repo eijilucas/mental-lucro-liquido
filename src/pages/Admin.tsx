@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useSearchParams } from "react-router-dom";
 import { TopBar, AdminBackLink } from "../components/TopBar";
 import { SignOutButton } from "../components/RequireAuth";
 import { DateRangePicker } from "../components/DateRangePicker";
@@ -33,6 +34,7 @@ import {
 } from "../lib/queries";
 
 type Tab = "sku" | "fees" | "overhead" | "frete" | "profit" | "coupon" | "payment";
+const TABS: Tab[] = ["sku", "fees", "overhead", "frete", "profit", "coupon", "payment"];
 type PieceMargin = { sku: string; units: number; netProfit: number; profitPerUnit: number; marginPct: number };
 
 function marginClass(pct: number) {
@@ -203,7 +205,16 @@ function ProductLinePanel({
 }
 
 export function Admin() {
-  const [tab, setTab] = useState<Tab>("overhead");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: Tab = tabParam && (TABS as string[]).includes(tabParam) ? (tabParam as Tab) : "overhead";
+  function setTab(next: Tab) {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set("tab", next);
+      return params;
+    }, { replace: true });
+  }
   const [overhead, setOverhead] = useState<OverheadRow[]>([]);
   const [feeRates, setFeeRates] = useState<FeeRatesRow | null>(null);
   const [productCosts, setProductCosts] = useState<ProductCostRow[]>([]);
