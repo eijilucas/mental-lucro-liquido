@@ -11,8 +11,10 @@
 //
 // Auth: bearer ADMIN_IMPORT_SECRET (mesmo padrão do shopify-import-orders).
 //
-// Deploy:
-//   npx supabase functions deploy match-shipping-costs --project-ref vatoeojxpejefxqslgli
+// Deploy — o --no-verify-jwt é obrigatório: o bearer aqui é um secret nosso,
+// não um JWT do Supabase, e sem a flag o gateway devolve
+// UNAUTHORIZED_INVALID_JWT_FORMAT antes da função rodar.
+//   npx supabase functions deploy match-shipping-costs --no-verify-jwt --project-ref vatoeojxpejefxqslgli
 //
 // Disparar (dryRun não escreve nada, só devolve o relatório):
 //   curl -X POST https://<ref>.supabase.co/functions/v1/match-shipping-costs \
