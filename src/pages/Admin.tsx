@@ -422,6 +422,14 @@ export function Admin() {
     ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
     : [[null, exclusivoAll.filter((p) => p.collection === null)]];
 
+  // Lucro por peça só mostra Drop Básico + o drop exclusivo atual — drop
+  // antigo continua no banco (histórico), só não aparece mais no ranking.
+  const currentPieceNames = new Set(
+    productCosts
+      .filter((p) => p.product_line === "basico" || p.collection === currentCollection?.collection)
+      .map((p) => p.product_name),
+  );
+
   if (!supabase) {
     return (
       <div className="app">
@@ -961,6 +969,7 @@ export function Admin() {
                   <tbody>
                     {(() => {
                       const filtered = pieceMargin
+                        .filter((row) => currentPieceNames.has(row.sku))
                         .filter((row) => row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase()))
                         .sort((a, b) => {
                           const dir = pieceSort.dir === "asc" ? 1 : -1;
