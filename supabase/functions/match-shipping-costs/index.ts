@@ -77,11 +77,22 @@ interface ShopifyOrder {
   customer?: { first_name?: string; last_name?: string } | null;
 }
 
+// Pedido candidato ao casamento — da Shopify (buscado na API) ou venda externa
+// (mandada no corpo, porque o Jackpot não guarda nome nem CEP de cliente).
 interface Candidate {
-  id: number;
+  chave: string; // "s:<shopify_order_id>" ou "e:<external_order_id>"
   orderNumber: string;
   date: number;
   usado: boolean;
+}
+
+// Pedido do Vendas Externas: o Jackpot só tem o id e a data, então nome e CEP
+// precisam vir do export daquele projeto pra dar pra casar com a etiqueta.
+interface ExternalOrderInput {
+  externalOrderId: string;
+  data?: string;
+  nome?: string;
+  cep?: string;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -177,7 +188,7 @@ Deno.serve(async (req) => {
   }
   if (STORE_PROFILES.length === 0) return json({ error: "nenhuma_loja_configurada" }, 500);
 
-  let body: { labels?: MeLabel[]; dryRun?: boolean; since?: string };
+  let body: { labels?: MeLabel[]; dryRun?: boolean; since?: string; externalOrders?: ExternalOrderInput[] };
   try {
     body = await req.json();
   } catch {
@@ -209,7 +220,7 @@ Deno.serve(async (req) => {
       const key = matchKey(orderRecipient(o), o.shipping_address?.zip);
       if (key === "|00000000") continue;
       const entry: Candidate = {
-        id: o.id,
+        chave: `s:${o.id}`,
         orderNumber: o.order_number != null ? String(o.order_number) : "",
         date: Date.parse(o.processed_at ?? o.created_at),
         usado: false,
@@ -219,7 +230,21 @@ Deno.serve(async (req) => {
       else index.set(key, [entry]);
     }
 
-    const custoPorPedido = new Map<number, { total: number; etiquetas: string[] }>();
+    for (const e of body.externalOrders ?? []) {
+      if (!e.externalOrderId || !e.nome || !e.cep) continue;
+      const key = matchKey(e.nome, e.cep);
+      const entry: Candidate = {
+        chave: `e:${e.externalOrderId}`,
+        orderNumber: "",
+        date: Date.parse(e.data ?? ""),
+        usado: false,
+      };
+      const list = index.get(key);
+      if (list) list.push(entry);
+      else index.set(key, [entry]);
+    }
+
+    const custoPorPedido = new Map<string, { total: number; etiquetas: string[] }>();
     const semCasamento: { protocol?: string; to_name?: string; paid_at?: string; price: number }[] = [];
     let reusados = 0;
 
@@ -255,51 +280,75 @@ Deno.serve(async (req) => {
       if (escolhido.usado) reusados++;
       escolhido.usado = true;
 
-      const atual = custoPorPedido.get(escolhido.id) ?? { total: 0, etiquetas: [] };
+      const atual = custoPorPedido.get(escolhido.chave) ?? { total: 0, etiquetas: [] };
       atual.total += Number(label.price);
       atual.etiquetas.push(label.protocol ?? label.id ?? "");
-      custoPorPedido.set(escolhido.id, atual);
+      custoPorPedido.set(escolhido.chave, atual);
     }
 
     const supabase: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const ids = [...custoPorPedido.keys()];
-    const existentes = new Map<number, number | null>();
-    for (let i = 0; i < ids.length; i += 200) {
+    const chaves = [...custoPorPedido.keys()];
+    const idsShopify = chaves.filter((k) => k.startsWith("s:")).map((k) => Number(k.slice(2)));
+    const idsExternos = chaves.filter((k) => k.startsWith("e:")).map((k) => k.slice(2));
+    const existentes = new Map<string, number | null>();
+
+    for (let i = 0; i < idsShopify.length; i += 200) {
       const { data, error } = await supabase
         .from("order_shipping")
         .select("shopify_order_id, cost")
-        .in("shopify_order_id", ids.slice(i, i + 200));
+        .in("shopify_order_id", idsShopify.slice(i, i + 200));
       if (error) throw error;
-      for (const row of data ?? []) existentes.set(Number(row.shopify_order_id), row.cost);
+      for (const row of data ?? []) existentes.set(`s:${row.shopify_order_id}`, row.cost);
+    }
+    for (let i = 0; i < idsExternos.length; i += 200) {
+      const { data, error } = await supabase
+        .from("order_shipping")
+        .select("external_order_id, cost")
+        .in("external_order_id", idsExternos.slice(i, i + 200));
+      if (error) throw error;
+      for (const row of data ?? []) existentes.set(`e:${row.external_order_id}`, row.cost);
     }
 
-    const paraEscrever: { shopify_order_id: number; cost: number; cost_synced_at: string }[] = [];
-    const divergencias: { shopify_order_id: number; custo_atual: number; custo_melhor_envio: number }[] = [];
-    const foraDoJackpot: number[] = [];
+    const escreverShopify: { shopify_order_id: number; cost: number; cost_synced_at: string }[] = [];
+    const escreverExterno: { external_order_id: string; cost: number; cost_synced_at: string }[] = [];
+    const divergencias: { pedido: string; custo_atual: number; custo_melhor_envio: number }[] = [];
+    const foraDoJackpot: string[] = [];
     const agora = new Date().toISOString();
 
-    for (const [id, { total }] of custoPorPedido) {
+    for (const [chave, { total }] of custoPorPedido) {
       const custo = Number(total.toFixed(2));
-      if (!existentes.has(id)) {
-        // Pedido que a ME entregou mas que não está em order_shipping — pedido
-        // de outra origem ou fora do período importado. Não inventa linha.
-        foraDoJackpot.push(id);
+      if (!existentes.has(chave)) {
+        // Pedido que a ME entregou mas que não está em order_shipping — outra
+        // origem, ou fora do período importado. Não inventa linha.
+        foraDoJackpot.push(chave);
         continue;
       }
-      const atual = existentes.get(id);
-      if (atual === null || atual === undefined) {
-        paraEscrever.push({ shopify_order_id: id, cost: custo, cost_synced_at: agora });
-      } else if (Math.abs(Number(atual) - custo) > 0.01) {
-        divergencias.push({ shopify_order_id: id, custo_atual: Number(atual), custo_melhor_envio: custo });
+      const atual = existentes.get(chave);
+      if (atual !== null && atual !== undefined) {
+        if (Math.abs(Number(atual) - custo) > 0.01) {
+          divergencias.push({ pedido: chave, custo_atual: Number(atual), custo_melhor_envio: custo });
+        }
+        continue;
+      }
+      if (chave.startsWith("s:")) {
+        escreverShopify.push({ shopify_order_id: Number(chave.slice(2)), cost: custo, cost_synced_at: agora });
+      } else {
+        escreverExterno.push({ external_order_id: chave.slice(2), cost: custo, cost_synced_at: agora });
       }
     }
+    const paraEscrever = [...escreverShopify, ...escreverExterno];
 
-    if (!body.dryRun && paraEscrever.length > 0) {
-      for (let i = 0; i < paraEscrever.length; i += 200) {
-        const lote = paraEscrever.slice(i, i + 200);
+    if (!body.dryRun) {
+      for (let i = 0; i < escreverShopify.length; i += 200) {
         const { error } = await supabase
           .from("order_shipping")
-          .upsert(lote, { onConflict: "shopify_order_id" });
+          .upsert(escreverShopify.slice(i, i + 200), { onConflict: "shopify_order_id" });
+        if (error) throw error;
+      }
+      for (let i = 0; i < escreverExterno.length; i += 200) {
+        const { error } = await supabase
+          .from("order_shipping")
+          .upsert(escreverExterno.slice(i, i + 200), { onConflict: "external_order_id" });
         if (error) throw error;
       }
     }
@@ -313,6 +362,9 @@ Deno.serve(async (req) => {
       pedidos_casados: custoPorPedido.size,
       etiquetas_somadas_no_mesmo_pedido: reusados,
       custo_gravado_em: paraEscrever.length,
+      gravado_shopify: escreverShopify.length,
+      gravado_vendas_externas: escreverExterno.length,
+      pedidos_externos_recebidos: (body.externalOrders ?? []).length,
       valor_total_gravado: Number(paraEscrever.reduce((s, r) => s + r.cost, 0).toFixed(2)),
       divergencias_ignoradas: divergencias.length,
       divergencias: divergencias.slice(0, 20),
