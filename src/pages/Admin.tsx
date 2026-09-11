@@ -12,6 +12,8 @@ import {
   deleteOverhead,
   insertOverhead,
   carryForwardFixedOverhead,
+  isHerdavel,
+  updateOverheadRecorrente,
   propagateFixedOverheadAmount,
   propagateFixedOverheadMethod,
   markOverheadManuallyEdited,
@@ -296,7 +298,7 @@ export function Admin() {
   const [profitRangeEnd, setProfitRangeEnd] = useState(todayStr());
   const [couponRows, setCouponRows] = useState<SaleMarginRow[]>([]);
   const [overheadMonth, setOverheadMonth] = useState(currentMonthStart());
-  const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"] });
+  const [newMarketing, setNewMarketing] = useState({ category: "", amount: "0,00", method: "per_revenue" as OverheadRow["allocation_method"], recorrente: false });
   const [newFixed, setNewFixed] = useState({ category: "", amount: "0,00", method: "per_unit" as OverheadRow["allocation_method"] });
   const [newProductBasico, setNewProductBasico] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("basico"));
   const [newProductExclusivo, setNewProductExclusivo] = useState<Omit<ProductCostRow, "id">>(() => emptyProductCost("exclusivo"));
@@ -369,34 +371,35 @@ export function Admin() {
     const parsed = parseMoney(value);
     if (parsed === null) return;
     const row = overhead.find((r) => r.id === id);
-    const isFixed = row ? !row.is_marketing : false;
-    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, amount: parsed, manually_edited: isFixed ? true : r.manually_edited } : r)));
+    const herdavel = row ? isHerdavel(row) : false;
+    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, amount: parsed, manually_edited: herdavel ? true : r.manually_edited } : r)));
     await updateOverheadAmount(id, parsed);
-    // Gasto fixo: marca esse mês como mexido na mão e propaga o valor novo
+    // Gasto herdável: marca esse mês como mexido na mão e propaga o valor novo
     // pros meses seguintes que ainda estão herdando.
-    if (row && isFixed) {
+    if (row && herdavel) {
       await markOverheadManuallyEdited(id);
-      await propagateFixedOverheadAmount(row.category, row.month, parsed);
+      await propagateFixedOverheadAmount(row.category, row.month, parsed, row.is_marketing);
     }
   }
 
   async function handleMethodChange(id: string, method: OverheadRow["allocation_method"]) {
     const row = overhead.find((r) => r.id === id);
-    const isFixed = row ? !row.is_marketing : false;
-    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, allocation_method: method, manually_edited: isFixed ? true : r.manually_edited } : r)));
+    const herdavel = row ? isHerdavel(row) : false;
+    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, allocation_method: method, manually_edited: herdavel ? true : r.manually_edited } : r)));
     await updateOverheadMethod(id, method);
-    if (row && isFixed) {
+    if (row && herdavel) {
       await markOverheadManuallyEdited(id);
-      await propagateFixedOverheadMethod(row.category, row.month, method);
+      await propagateFixedOverheadMethod(row.category, row.month, method, row.is_marketing);
     }
   }
 
   async function handleDeleteOverhead(id: string) {
     const row = overhead.find((r) => r.id === id);
     setOverhead((rows) => rows.filter((r) => r.id !== id));
-    if (row && !row.is_marketing) {
-      // Gasto fixo: apaga desse mês pra frente, o passado fica no histórico.
-      await deleteFixedOverheadForward(row.category, row.month);
+    if (row && isHerdavel(row)) {
+      // Gasto que se repete: apaga desse mês pra frente, o passado fica no
+      // histórico. Marketing pontual some só do mês dele.
+      await deleteFixedOverheadForward(row.category, row.month, row.is_marketing);
     } else {
       await deleteOverhead(id);
     }
@@ -405,9 +408,44 @@ export function Admin() {
   async function handleAddMarketing() {
     const amount = parseMoney(newMarketing.amount) ?? 0;
     if (!newMarketing.category.trim()) return;
-    const row = await insertOverhead({ category: newMarketing.category.trim(), amount, is_marketing: true, allocation_method: newMarketing.method, month: overheadMonth });
+    const row = await insertOverhead({
+      category: newMarketing.category.trim(),
+      amount,
+      is_marketing: true,
+      allocation_method: newMarketing.method,
+      month: overheadMonth,
+      recorrente: newMarketing.recorrente,
+      // Você digitou esse valor, então ele é o gasto do mês — não uma projeção
+      // herdada. Sem isso o rateio trataria como estimativa e cortaria pelos
+      // dias decorridos.
+      manually_edited: true,
+    });
     setOverhead((rows) => [...rows, row]);
-    setNewMarketing({ category: "", amount: "0,00", method: "per_revenue" });
+    const repetia = newMarketing.recorrente;
+    setNewMarketing({ category: "", amount: "0,00", method: "per_revenue", recorrente: false });
+    if (repetia) {
+      // Materializa nos meses seguintes que já existem (cadastro feito num mês
+      // passado precisa alcançar até o mês corrente).
+      try {
+        await carryForwardFixedOverhead();
+      } catch {
+        // herança é conveniência — falhar aqui não pode derrubar o cadastro
+      }
+    }
+  }
+
+  async function handleRecorrenteToggle(id: string, recorrente: boolean) {
+    setOverhead((rows) => rows.map((r) => (r.id === id ? { ...r, recorrente } : r)));
+    await updateOverheadRecorrente(id, recorrente);
+    // Desligar não precisa de limpeza: a herança só materializa até o mês
+    // corrente, então não existe cópia futura pra remover.
+    if (recorrente) {
+      try {
+        await carryForwardFixedOverhead();
+      } catch {
+        // idem
+      }
+    }
   }
 
   async function handleAddFixed() {
@@ -630,6 +668,7 @@ export function Admin() {
                         <th>Nome do gasto</th>
                         <th className="num" style={{ width: 120 }}>Valor</th>
                         <th style={{ width: 170 }}>Como dividir</th>
+                        <th style={{ width: 110 }}>Repete todo mês</th>
                         <th style={{ width: 40 }}></th>
                       </tr>
                     </thead>
@@ -659,6 +698,16 @@ export function Admin() {
                                 Variável
                               </button>
                             </div>
+                          </td>
+                          <td>
+                            <label className="check-cell" title="Herda pro mês seguinte com o mesmo valor, como um gasto fixo. Editar o valor propaga pros meses que ainda estão herdando.">
+                              <input
+                                type="checkbox"
+                                checked={row.recorrente}
+                                onChange={(e) => handleRecorrenteToggle(row.id, e.target.checked)}
+                              />
+                              <span>{row.recorrente ? "sim" : "não"}</span>
+                            </label>
                           </td>
                           <td>
                             <div className="icon-cell" onClick={() => handleDeleteOverhead(row.id)}>✕</div>
@@ -701,6 +750,16 @@ export function Admin() {
                               Variável
                             </button>
                           </div>
+                        </td>
+                        <td>
+                          <label className="check-cell" title="Marque para esse gasto se repetir automaticamente nos próximos meses.">
+                            <input
+                              type="checkbox"
+                              checked={newMarketing.recorrente}
+                              onChange={(e) => setNewMarketing((s) => ({ ...s, recorrente: e.target.checked }))}
+                            />
+                            <span>{newMarketing.recorrente ? "sim" : "não"}</span>
+                          </label>
                         </td>
                         <td>
                           <div className="icon-cell" onClick={handleAddMarketing}>+</div>

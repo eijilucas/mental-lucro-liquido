@@ -414,6 +414,10 @@ td.sku .sku-id { display: block; font-family: var(--font-body); font-size: 11px;
 .margin-pill.mid { color: var(--ink-faint); border-color: var(--border-strong); }
 .margin-pill.low { color: var(--negative); border-color: var(--negative); }
 
+/* "Repete todo mês" nos gastos de marketing. */
+.check-cell { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: var(--font-body); font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.check-cell input { accent-color: var(--accent); cursor: pointer; }
+
 /* Peça que aparece no ranking sem custo de produção cadastrado — a margem
    dela é fictícia (só embalagem entra como custo), então avisa na tabela. */
 .cost-missing { display: inline-block; margin-left: 8px; font-family: var(--font-body); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 6px; color: var(--negative); border: 1px solid var(--negative); }
