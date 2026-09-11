@@ -14,62 +14,7 @@ begin;
 
 drop view if exists monthly_dre;
 drop view if exists sale_margin;
-drop view if exists sale_overhead_allocation;
-drop view if exists monthly_totals;
 
--- ----------------------------------------------------------------------------
--- Base de rateio: unidades e faturamento LÍQUIDO por mês.
--- ----------------------------------------------------------------------------
-create view monthly_totals as
-select
-  date_trunc('month', sale_date)::date as month,
-  sum(quantity) as units,
-  sum(gross_amount - discount_amount) as revenue
-from sale_revenue
-group by 1;
-
-alter view monthly_totals set (security_invoker = true);
-
--- ----------------------------------------------------------------------------
--- Quanto de marketing e de fixo cada venda absorve. O fixo do mês corrente
--- entra proporcional aos dias decorridos — senão a venda do dia 1 carrega o
--- aluguel do mês inteiro e o lucro do mês vai "melhorando" sozinho conforme
--- as vendas entram.
--- ----------------------------------------------------------------------------
-create view sale_overhead_allocation as
-select
-  coalesce(sr.shopify_order_id::text, sr.external_order_id::text) as sale_key,
-  coalesce(sr.shopify_line_item_id::text, sr.external_item_id::text) as line_key,
-  coalesce(sum(
-    case
-      when mo.allocation_method = 'per_unit' then (mo.amount * sr.quantity::numeric) / nullif(mt.units, 0)::numeric
-      else (mo.amount * (sr.gross_amount - sr.discount_amount)) / nullif(mt.revenue, 0::numeric)
-    end
-  ) filter (where mo.is_marketing), 0::numeric) as marketing_cost,
-  coalesce(sum(
-    case
-      when mo.allocation_method = 'per_unit' then (mo.amount * sr.quantity::numeric) / nullif(mt.units, 0)::numeric
-      else (mo.amount * (sr.gross_amount - sr.discount_amount)) / nullif(mt.revenue, 0::numeric)
-    end
-    * case
-        when mt.month <> date_trunc('month', now())::date then 1::numeric
-        else least(
-          1::numeric,
-          extract(day from now())::numeric
-            / extract(day from (date_trunc('month', now()) + interval '1 month' - interval '1 day'))::numeric
-        )
-      end
-  ) filter (where not mo.is_marketing), 0::numeric) as fixed_cost
-from sale_revenue sr
-join monthly_totals mt on mt.month = (date_trunc('month', sr.sale_date))::date
-left join monthly_overhead mo on mo.month = mt.month
-group by 1, 2;
-
-alter view sale_overhead_allocation set (security_invoker = true);
-
--- ----------------------------------------------------------------------------
--- Margem por linha de venda. gross_amount aqui é LÍQUIDO de desconto.
--- ----------------------------------------------------------------------------
 create view sale_margin as
 with order_totals as (
   select
@@ -194,8 +139,8 @@ alter view monthly_dre set (security_invoker = true);
 -- Drop de view apaga os grants junto — reaplica pra não depender de default
 -- privilege (o acesso real continua barrado pela RLS das tabelas, porque as
 -- views são security_invoker).
-grant select on monthly_totals, sale_overhead_allocation, sale_margin, monthly_dre to authenticated;
-grant select on monthly_totals, sale_overhead_allocation, sale_margin, monthly_dre to service_role;
+grant select on sale_margin, monthly_dre to authenticated;
+grant select on sale_margin, monthly_dre to service_role;
 
 notify pgrst, 'reload schema';
 
