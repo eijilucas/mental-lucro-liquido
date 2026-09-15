@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { HubLogoLink } from "../components/TopBar";
 import { supabase } from "../lib/supabase";
 import { useSession } from "../lib/useSession";
 
@@ -29,7 +30,7 @@ export function Login() {
   return (
     <div className="app" style={{ maxWidth: 380, paddingTop: 96 }}>
       <div className="brand" style={{ marginBottom: 28 }}>
-        <img src="/logo-m.png" alt="Mental Madness" className="brand-logo" />
+        <HubLogoLink />
         <span className="brand-mark">Mental Madness</span>
         <span className="brand-sep">/</span>
         <span className="brand-app">jackpot</span>

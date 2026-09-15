@@ -59,6 +59,8 @@ body {
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-logo { width: 30px; height: 30px; object-fit: contain; }
+.brand-logo-link { display: inline-flex; border-radius: 6px; }
+.brand-logo-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .brand-mark { font-family: "Horst Blackletter", var(--font-display); font-weight: 900; font-size: 24px; letter-spacing: 0.02em; color: var(--ink); }
 .brand-sep { color: var(--border-strong); }
 .brand-app {
