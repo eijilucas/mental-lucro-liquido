@@ -89,6 +89,7 @@ interface ShopifyOrder {
   order_number?: number;
   processed_at?: string;
   created_at: string;
+  cancelled_at?: string | null;
   line_items: ShopifyLineItem[];
   discount_codes?: ShopifyDiscountCode[];
   payment_gateway_names?: string[];
@@ -135,6 +136,18 @@ interface ShopifyRefund {
 }
 
 async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, productLine: ProductLine) {
+  // A Shopify não garante ordem de entrega dos webhooks. Pedido pago e
+  // cancelado em poucos minutos pode chegar como orders/cancelled ANTES de
+  // orders/paid — nesse caso handleOrderCancelled roda sem ter o que apagar,
+  // e depois orders/paid gravaria a venda sem que nenhum evento futuro venha
+  // limpar. O próprio payload de orders/paid já diz se o pedido está
+  // cancelado (cancelled_at), então checa aqui em vez de confiar só na ordem
+  // de chegada dos eventos.
+  if (order.cancelled_at) {
+    await handleOrderCancelled(supabase, order);
+    return;
+  }
+
   // Casa a venda com o custo da peça pelo product_id, não pelo SKU nem
   // pelo variant_id — a loja não tem SKU cadastrado em nenhum produto na
   // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
