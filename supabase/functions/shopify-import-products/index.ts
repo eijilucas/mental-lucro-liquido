@@ -245,18 +245,53 @@ async function importFromProfile(profile: StoreProfile): Promise<ProductCostStub
   });
 }
 
-async function importProducts(supabase: SupabaseClient): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
+async function importProducts(supabase: SupabaseClient): Promise<Record<string, { novas: number; recolocadas: number }>> {
+  const counts: Record<string, { novas: number; recolocadas: number }> = {};
 
   for (const profile of STORE_PROFILES) {
     const stubs = await importFromProfile(profile);
-    counts[profile.productLine] = stubs.length;
-    if (stubs.length === 0) continue;
+    if (stubs.length === 0) {
+      counts[profile.productLine] = { novas: 0, recolocadas: 0 };
+      continue;
+    }
 
-    const { error } = await supabase
+    // Peça nova (nunca vista): cria a linha completa, custo zerado — igual
+    // sempre foi.
+    const ids = stubs.map((s) => s.shopify_product_id);
+    const { data: existentes, error: exErr } = await supabase
       .from("product_costs")
-      .upsert(stubs, { onConflict: "shopify_product_id", ignoreDuplicates: true });
-    if (error) throw error;
+      .select("shopify_product_id")
+      .in("shopify_product_id", ids);
+    if (exErr) throw exErr;
+    const idsExistentes = new Set((existentes ?? []).map((r) => r.shopify_product_id as number));
+
+    const novas = stubs.filter((s) => !idsExistentes.has(s.shopify_product_id));
+    const jaExistentes = stubs.filter((s) => idsExistentes.has(s.shopify_product_id));
+
+    if (novas.length > 0) {
+      const { error } = await supabase
+        .from("product_costs")
+        .upsert(novas, { onConflict: "shopify_product_id", ignoreDuplicates: true });
+      if (error) throw error;
+    }
+
+    // Peça que já existia: NUNCA mexe em custo, nome, sku ou product_line —
+    // isso é o que o admin edita na mão (product_line inclusive já foi
+    // reclassificado manualmente pra peça de drop antigo, ver migração
+    // 20260913000001). Só realinha collection/collection_published_at com o
+    // que a Shopify diz hoje, porque senão uma peça criada num dia em que
+    // ainda não estava na coleção fica com a etiqueta errada pra sempre,
+    // mesmo depois de alguém corrigir isso lá na Shopify — o cron roda todo
+    // dia, então essa correção agora chega sozinha na próxima execução.
+    for (const s of jaExistentes) {
+      const { error } = await supabase
+        .from("product_costs")
+        .update({ collection: s.collection, collection_published_at: s.collection_published_at })
+        .eq("shopify_product_id", s.shopify_product_id);
+      if (error) throw error;
+    }
+
+    counts[profile.productLine] = { novas: novas.length, recolocadas: jaExistentes.length };
   }
 
   return counts;
