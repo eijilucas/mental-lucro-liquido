@@ -122,6 +122,7 @@ interface SaleRow {
   discount_amount: number;
   sale_date: string;
   has_coupon: boolean;
+  coupon_codes: string[];
   payment_method: "pix" | "cartao" | "vale_presente";
 }
 
@@ -202,6 +203,9 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
   }
 
   const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+  // Código de cada cupom, pra comissão de influencer poder ignorar os que
+  // estiverem em cupons_sem_comissao.
+  const couponCodes = (order.discount_codes ?? []).map((d) => d.code);
   const paymentMethod = detectPaymentMethod(order);
 
   return (order.line_items ?? [])
@@ -225,16 +229,17 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
         discount_amount,
         sale_date: order.processed_at ?? order.created_at,
         has_coupon: hasCoupon,
+        coupon_codes: couponCodes,
         payment_method: paymentMethod,
       };
     })
     .filter((row) => row.quantity > 0);
 }
 
-// Produtos que nunca são peça de roupa de verdade (gift card, pingente)
-// não ganham linha de custo automática. Pingente continua entrando como
-// venda; gift card já nem chega aqui (ver isGiftCard).
-const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+// Gift card não tem custo de produção, então não ganha linha de custo
+// automática (e nem chega aqui como venda — ver isGiftCard). Pingente ganha:
+// tem custo de produção como qualquer peça.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i];
 
 async function ensureProductCostStubs(
   supabase: SupabaseClient,

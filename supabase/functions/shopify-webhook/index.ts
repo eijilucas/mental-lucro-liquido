@@ -166,6 +166,9 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   // Shopify, e o custo (tecido/estampa/costura) é o mesmo pra qualquer
   // tamanho da mesma peça, então o custo é por produto, não por variante.
   const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
+  // Código de cada cupom, pra comissão de influencer poder ignorar os que
+  // estiverem em cupons_sem_comissao.
+  const couponCodes = (order.discount_codes ?? []).map((d) => d.code);
   const paymentMethod = detectPaymentMethod(order);
 
   // O payload traz a quantidade ORIGINAL de cada item. Se um reembolso desse
@@ -191,6 +194,7 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
         discount_amount: item.quantity > 0 ? Number((lineDiscount(item) * (quantity / item.quantity)).toFixed(2)) : 0,
         sale_date: order.processed_at ?? order.created_at,
         has_coupon: hasCoupon,
+        coupon_codes: couponCodes,
         payment_method: paymentMethod,
       };
     })
@@ -229,10 +233,10 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   );
 }
 
-// Produtos que nunca são peça de roupa de verdade (gift card, pingente)
-// não ganham linha de custo automática. Pingente continua entrando como
-// venda; gift card já nem chega aqui (ver isGiftCard).
-const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+// Gift card não tem custo de produção, então não ganha linha de custo
+// automática (e nem chega aqui como venda — ver isGiftCard). Pingente ganha:
+// tem custo de produção como qualquer peça.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i];
 
 // Cria a linha da peça em `product_costs` na primeira venda que aparecer
 // com aquele product_id — custo tudo zerado, só o nome certo (veio

@@ -21,9 +21,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EXPECTED_SECRET = Deno.env.get("EXTERNAL_SALE_SECRET") ?? "";
 
-// Mesma exclusão do shopify-webhook: gift card / pingente não são peça de
-// roupa, não ganham linha de custo automática (a receita entra do mesmo jeito).
-const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+// Mesma exclusão do shopify-webhook: gift card não tem custo de produção,
+// não ganha linha de custo automática. Pingente ganha.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i];
 
 interface ItemInput {
   externalItemId: string;
