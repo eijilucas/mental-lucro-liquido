@@ -1209,7 +1209,9 @@ export function Admin() {
                             ? feeRates.taxa_shopify_pct + feeRates.taxa_gateway_cartao_pct + feeRates.imposto_pct
                               + feeRates.comissao_influencer_pct
                             : 0;
-                          const estimatedProfit = preco !== null ? preco - directCost - preco * saleCostPct : null;
+                          // pior caso no cartão inclui o antifraude, que é por pedido
+                          const antifraude = feeRates?.taxa_antifraude_fixo ?? 0;
+                          const estimatedProfit = preco !== null ? preco - directCost - preco * saleCostPct - antifraude : null;
                           const estimatedMarginPct = preco !== null && preco > 0 ? (estimatedProfit! / preco) * 100 : null;
                           return (
                             <tr key={p.id}>
@@ -1294,6 +1296,15 @@ export function Admin() {
                 hint={`${new Set(couponRows.filter((r) => r.payment_method === "cartao").map((r) => r.sale_id)).size} vendas pagas via cartão`}
                 dre={aggregateDre(couponRows.filter((r) => r.payment_method === "cartao"))}
               />
+              {/* Pago inteiro com vale-presente: sem taxa de gateway. Só aparece
+                  quando existe, pra Pix + Cartão não deixarem essas vendas de fora. */}
+              {couponRows.some((r) => r.payment_method === "vale_presente") && (
+                <DreWaterfall
+                  title="DRE — Vale-presente"
+                  hint={`${new Set(couponRows.filter((r) => r.payment_method === "vale_presente").map((r) => r.sale_id)).size} vendas pagas só com vale-presente`}
+                  dre={aggregateDre(couponRows.filter((r) => r.payment_method === "vale_presente"))}
+                />
+              )}
             </>
           )}
         </>

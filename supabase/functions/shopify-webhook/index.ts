@@ -26,8 +26,8 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 type ProductLine = "basico" | "exclusivo";
 
 const STORE_SECRETS: { secret: string; productLine: ProductLine }[] = [
-  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_BASICO") ?? "", productLine: "basico" },
-  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_EXCLUSIVO") ?? "", productLine: "exclusivo" },
+  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_BASICO") ?? "", productLine: "basico" as const },
+  { secret: Deno.env.get("SHOPIFY_CLIENT_SECRET_EXCLUSIVO") ?? "", productLine: "exclusivo" as const },
 ].filter((s) => s.secret);
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -119,10 +119,14 @@ function lineDiscount(item: ShopifyLineItem): number {
 }
 
 // Qualquer gateway com "pix" no nome (o app que processa Pix varia por
-// loja) — o resto (cartão, boleto etc.) cai como "cartao".
-function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" {
+// loja). Pago só com vale-presente não passa por gateway nenhum, então não
+// paga taxa de cartão nem antifraude. O resto (cartão, boleto, vale + cartão)
+// cai como "cartao" — o pedido não diz quanto foi pago em cada meio.
+function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" | "vale_presente" {
   const names = order.payment_gateway_names ?? [];
-  return names.some((n) => /pix/i.test(n)) ? "pix" : "cartao";
+  if (names.some((n) => /pix/i.test(n))) return "pix";
+  if (names.length > 0 && names.every((n) => /gift_?card/i.test(n))) return "vale_presente";
+  return "cartao";
 }
 
 // Compra de vale-presente não é receita: é dinheiro adiantado que vira venda
@@ -164,21 +168,33 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   const hasCoupon = (order.discount_codes?.length ?? 0) > 0;
   const paymentMethod = detectPaymentMethod(order);
 
+  // O payload traz a quantidade ORIGINAL de cada item. Se um reembolso desse
+  // pedido já foi aplicado (orders/paid reenviado pela Shopify, ou entregue
+  // depois do refunds/create), gravar isso desfaria o reembolso — então
+  // desconta o que já foi devolvido, igual o shopify-import-orders faz.
+  const devolvido = await refundedByLineItem(supabase, order.id);
+
   const rows = (order.line_items ?? [])
     .filter((item) => !!item.product_id && !isGiftCard(item))
-    .map((item) => ({
-      shopify_order_id: order.id,
-      shopify_line_item_id: item.id,
-      shopify_product_id: item.product_id as number,
-      product_sku: item.sku,
-      product_name: item.variant_title ? `${item.title} - ${item.variant_title}` : (item.title ?? item.name ?? "Sem nome"),
-      quantity: item.quantity,
-      gross_amount: Number(item.price) * item.quantity,
-      discount_amount: lineDiscount(item),
-      sale_date: order.processed_at ?? order.created_at,
-      has_coupon: hasCoupon,
-      payment_method: paymentMethod,
-    }));
+    .map((item) => {
+      const refunded = devolvido.get(item.id);
+      const quantity = Math.max(0, item.quantity - (refunded?.quantity ?? 0));
+      return {
+        shopify_order_id: order.id,
+        shopify_line_item_id: item.id,
+        shopify_product_id: item.product_id as number,
+        product_sku: item.sku,
+        product_name: item.variant_title ? `${item.title} - ${item.variant_title}` : (item.title ?? item.name ?? "Sem nome"),
+        quantity,
+        gross_amount: Math.max(0, Number(item.price) * item.quantity - (refunded?.amount ?? 0)),
+        // Desconto acompanha as unidades que sobraram depois do reembolso.
+        discount_amount: item.quantity > 0 ? Number((lineDiscount(item) * (quantity / item.quantity)).toFixed(2)) : 0,
+        sale_date: order.processed_at ?? order.created_at,
+        has_coupon: hasCoupon,
+        payment_method: paymentMethod,
+      };
+    })
+    .filter((row) => row.quantity > 0);
 
   if (rows.length === 0) return;
 
@@ -252,6 +268,27 @@ async function handleOrderCancelled(supabase: SupabaseClient, order: { id: numbe
   if (error) throw error;
   const { error: shipError } = await supabase.from("order_shipping").delete().eq("shopify_order_id", order.id);
   if (shipError) throw shipError;
+}
+
+// Soma, por item, o que os reembolsos já aplicados desse pedido devolveram
+// (aplicar_reembolso_shopify guarda os itens de cada um).
+async function refundedByLineItem(supabase: SupabaseClient, orderId: number) {
+  const { data, error } = await supabase
+    .from("shopify_refunds_aplicados")
+    .select("itens")
+    .eq("shopify_order_id", orderId);
+  if (error) throw error;
+
+  const byLineItem = new Map<number, { quantity: number; amount: number }>();
+  for (const refund of data ?? []) {
+    for (const item of (refund.itens ?? []) as { line_item_id: number; quantity: number; unit_price: number }[]) {
+      const entry = byLineItem.get(Number(item.line_item_id)) ?? { quantity: 0, amount: 0 };
+      entry.quantity += Number(item.quantity) || 0;
+      entry.amount += (Number(item.unit_price) || 0) * (Number(item.quantity) || 0);
+      byLineItem.set(Number(item.line_item_id), entry);
+    }
+  }
+  return byLineItem;
 }
 
 // A Shopify pode entregar o mesmo refunds/create mais de uma vez. Subtrair
