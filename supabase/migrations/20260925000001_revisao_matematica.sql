@@ -130,8 +130,12 @@ create table if not exists shopify_refunds_aplicados (
   aplicado_em timestamptz not null default now()
 );
 
--- Só o shopify-webhook (service role) mexe aqui.
+-- Só o shopify-webhook (service role) mexe aqui. O grant é explícito porque
+-- tabela nova não fica mais exposta sozinha aos papéis da API (ver
+-- auto_expose_new_tables no config.toml) — sem ele o reembolso falha com
+-- permission denied.
 alter table shopify_refunds_aplicados enable row level security;
+grant select, insert on shopify_refunds_aplicados to service_role;
 
 -- p_itens: [{ "line_item_id": 123, "quantity": 1, "unit_price": 99.90 }, ...]
 -- Devolve false quando esse reembolso já tinha sido aplicado (reenvio).
