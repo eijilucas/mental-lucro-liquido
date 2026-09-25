@@ -68,7 +68,10 @@ export function Dashboard() {
         // impressão de venda no site num drop já fechado.
         const dreOf = (rs: typeof rows) => (rs.length > 0 ? aggregateDre(rs) : null);
         const basicoDre = dreOf(rows.filter((r) => r.source === "shopify" && r.product_line === "basico"));
-        const exclusivoDre = dreOf(rows.filter((r) => r.source === "shopify" && r.product_line === "exclusivo"));
+        // "Tudo do site que não é básico": peça de drop antigo reclassificada
+        // pra 'external' que ainda vende no site cai aqui, em vez de não
+        // aparecer em card nenhum.
+        const exclusivoDre = dreOf(rows.filter((r) => r.source === "shopify" && r.product_line !== "basico"));
         const externalDre = dreOf(rows.filter((r) => r.source === "external"));
         setData({ dre, prevDre, basicoDre, exclusivoDre, externalDre, lastSync });
       } catch (e) {

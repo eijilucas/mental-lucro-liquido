@@ -515,8 +515,7 @@ export function Admin() {
 
   // Só mostra o painel da coleção MAIS RECENTE (o drop atual — identificado
   // pelo published_at mais novo, sem precisar hardcodar o nome). Drops
-  // antigos e peças sem coleção ficam escondidos, mas continuam no banco —
-  // só não poluem mais a tela.
+  // antigos ficam escondidos, mas continuam no banco — só não poluem a tela.
   const exclusivoAll = productCosts.filter((p) => p.product_line === "exclusivo");
   const currentCollection = exclusivoAll
     .filter((p) => p.collection && p.collection_published_at)
@@ -527,9 +526,20 @@ export function Admin() {
       return latest;
     }, null);
 
+  // Peça exclusiva sem coleção ganha painel próprio mesmo quando existe drop
+  // atual. Antes ela sumia de todas as telas: peça nova que ainda não foi
+  // associada à coleção na Shopify ficava sem lugar pra preencher o custo.
+  // Fica de fora só a cópia de peça do básico que existe também na loja dos
+  // Exclusivos (mesmo nome, custo zero, nunca vendeu) — é a mesma peça, o
+  // custo de verdade está no painel do Drop Básico.
+  const basicoNames = new Set(productCosts.filter((p) => p.product_line === "basico").map((p) => p.product_name));
+  const exclusivoSemColecao = exclusivoAll.filter((p) => p.collection === null && !basicoNames.has(p.product_name));
   const exclusivoGroups: [string | null, ProductCostRow[]][] = currentCollection
-    ? [[currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)]]
-    : [[null, exclusivoAll.filter((p) => p.collection === null)]];
+    ? [
+        [currentCollection.collection, exclusivoAll.filter((p) => p.collection === currentCollection.collection)],
+        ...(exclusivoSemColecao.length > 0 ? [[null, exclusivoSemColecao] as [string | null, ProductCostRow[]]] : []),
+      ]
+    : [[null, exclusivoSemColecao]];
 
   // Drop antigo = tem `collection` preenchida e não é a coleção atual —
   // independe de product_line (peça de drop antigo pode ter sido
@@ -541,22 +551,18 @@ export function Admin() {
       .map((p) => p.product_name),
   );
 
-  // Lucro por peça mostra Drop Básico + Vendas Externas (sem coleção) + o
-  // drop exclusivo atual — drop antigo vira a box "Venda Externa" à parte.
-  const currentPieceNames = new Set(
-    productCosts
-      .filter((p) => !oldDropPieceNames.has(p.product_name))
-      .filter((p) => p.product_line === "basico" || p.product_line === "external" || p.collection === currentCollection?.collection)
-      .map((p) => p.product_name),
-  );
-
   // Peça sem custo de produção cadastrado entra no ranking com margem
   // fictícia (só sacolinha e adesivo contam como custo), então marca na
   // tabela. Peça que nem tem linha em product_costs cai no mesmo caso —
   // a venda casa por shopify_product_id e não achou nada.
-  const pieceCostTotals = new Map(
-    productCosts.map((p) => [p.product_name, p.tecido + p.estampa + p.costura + p.outros_acabamentos]),
-  );
+  // O mesmo nome pode ter duas linhas (peça do básico copiada na loja dos
+  // Exclusivos, a cópia com custo zero); vale o maior custo, senão a peça que
+  // mais vende podia ganhar o selo por causa da cópia.
+  const pieceCostTotals = new Map<string, number>();
+  for (const p of productCosts) {
+    const total = p.tecido + p.estampa + p.costura + p.outros_acabamentos;
+    pieceCostTotals.set(p.product_name, Math.max(total, pieceCostTotals.get(p.product_name) ?? 0));
+  }
   const isCostMissing = (pieceName: string) => (pieceCostTotals.get(pieceName) ?? 0) === 0;
 
   if (!supabase) {
@@ -1080,7 +1086,9 @@ export function Admin() {
                       setNewProductExclusivo(emptyProductCost("exclusivo", collection)),
                     )
                   }
-                  showAddRow
+                  // Os dois painéis dividem o mesmo rascunho de peça nova — a
+                  // linha de adicionar fica só no do drop atual.
+                  showAddRow={collection === (currentCollection?.collection ?? null)}
                 />
               ))}
               <ProductLinePanel
@@ -1098,7 +1106,10 @@ export function Admin() {
 
           {tab === "profit" && (() => {
             const bySearch = (row: PieceMargin) => row.sku.toLowerCase().includes(pieceSearch.trim().toLowerCase());
-            const mainRows = pieceMargin.filter((row) => currentPieceNames.has(row.sku)).filter(bySearch);
+            // Tudo que vendeu aparece: drop antigo vai pra caixa de baixo, o resto
+            // fica aqui. Antes peça exclusiva sem coleção não caía em nenhuma
+            // das duas e o lucro dela sumia da tela.
+            const mainRows = pieceMargin.filter((row) => !oldDropPieceNames.has(row.sku)).filter(bySearch);
             const oldDropRows = pieceMargin.filter((row) => oldDropPieceNames.has(row.sku)).filter(bySearch);
             return (
               <>
@@ -1128,7 +1139,7 @@ export function Admin() {
                 </div>
                 <PieceMarginTable
                   title="Lucro por peça"
-                  hint="Drop Básico, Vendas Externas e o drop exclusivo atual."
+                  hint="Drop Básico, Vendas Externas, o drop exclusivo atual e peça exclusiva ainda sem coleção."
                   rows={mainRows}
                   sort={pieceSort}
                   onSort={handlePieceSort}

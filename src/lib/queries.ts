@@ -127,15 +127,45 @@ function db() {
   return supabase;
 }
 
-export async function fetchSaleMarginForRange(start: string, end: string) {
+// As datas da tela são dias de Brasília. Mandando só "2026-09-01", o banco lia
+// meia-noite UTC (21h do dia anterior aqui): o filtro pegava as vendas das 21h
+// às 24h da véspera e cortava as do mesmo horário no último dia do período.
+// Brasil não tem horário de verão desde 2019, então o -03:00 é fixo.
+function brasiliaMidnight(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00-03:00`).toISOString();
+}
+
+// O Supabase devolve no máximo 1000 linhas por requisição (max_rows) e corta o
+// resto EM SILÊNCIO — sem erro, a venda simplesmente some da soma. Julho a
+// setembro já passa de 1200 linhas. Então a busca é feita em fatias de tempo:
+// se uma fatia volta no limite, divide ao meio e busca as duas metades. As
+// fatias são intervalos [de, até), então nenhuma linha entra duas vezes nem
+// fica de fora.
+const MAX_ROWS_PER_REQUEST = 1000;
+
+async function fetchSaleMarginSlice(fromIso: string, toIso: string): Promise<SaleMarginRow[]> {
   const { data, error } = await db()
     .from("sale_margin")
     .select("*")
-    .gte("sale_date", start)
-    .lt("sale_date", dayAfter(end))
+    .gte("sale_date", fromIso)
+    .lt("sale_date", toIso)
     .returns<SaleMarginRow[]>();
   if (error) throw error;
-  return data ?? [];
+  const rows = data ?? [];
+  if (rows.length < MAX_ROWS_PER_REQUEST) return rows;
+
+  const from = Date.parse(fromIso);
+  const to = Date.parse(toIso);
+  if (to - from <= 60_000) {
+    throw new Error("Mais de 1000 linhas de venda no mesmo minuto — não dá pra dividir a busca.");
+  }
+  const mid = new Date(from + Math.floor((to - from) / 2)).toISOString();
+  const [first, second] = await Promise.all([fetchSaleMarginSlice(fromIso, mid), fetchSaleMarginSlice(mid, toIso)]);
+  return first.concat(second);
+}
+
+export async function fetchSaleMarginForRange(start: string, end: string) {
+  return fetchSaleMarginSlice(brasiliaMidnight(start), brasiliaMidnight(dayAfter(end)));
 }
 
 export async function fetchSkuMarginForRange(start: string, end: string) {
