@@ -65,6 +65,14 @@ interface ShopifyLineItem {
   price: string;
   total_discount?: string | null;
   discount_allocations?: { amount: string }[];
+  gift_card?: boolean;
+}
+
+// Compra de vale-presente não é receita — mesma regra do shopify-webhook: o
+// pedido pago com o vale é que entra como venda. Gravar a compra também
+// contava a mesma receita duas vezes.
+function isGiftCard(item: ShopifyLineItem): boolean {
+  return item.gift_card === true || /gift\s*card/i.test(item.title ?? item.name ?? "");
 }
 
 interface ShopifyRefundLineItem {
@@ -193,7 +201,7 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
   const paymentMethod = detectPaymentMethod(order);
 
   return (order.line_items ?? [])
-    .filter((item) => !!item.product_id)
+    .filter((item) => !!item.product_id && !isGiftCard(item))
     .map((item) => {
       const refunded = refundedByLineItem.get(item.id);
       const quantity = Math.max(0, item.quantity - (refunded?.quantity ?? 0));
@@ -220,8 +228,8 @@ function buildSaleRows(order: ShopifyOrder): SaleRow[] {
 }
 
 // Produtos que nunca são peça de roupa de verdade (gift card, pingente)
-// — a venda continua sendo registrada normalmente, só não ganham uma
-// linha de custo automática.
+// não ganham linha de custo automática. Pingente continua entrando como
+// venda; gift card já nem chega aqui (ver isGiftCard).
 const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
 
 async function ensureProductCostStubs(

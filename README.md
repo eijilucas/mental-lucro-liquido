@@ -85,7 +85,11 @@ Código em `supabase/functions/shopify-webhook/index.ts`. Recebe
 `orders/paid`, `orders/cancelled` e `refunds/create` e mantém
 `sale_revenue` atualizada (upsert idempotente por `shopify_order_id` +
 `shopify_line_item_id` — a Shopify pode reenviar o mesmo webhook mais de
-uma vez, então não pode duplicar).
+uma vez, então não pode duplicar). Reembolso é aplicado pela função
+`aplicar_reembolso_shopify` no banco, que guarda o id de cada reembolso em
+`shopify_refunds_aplicados` — reenvio do mesmo reembolso não desconta de
+novo. Item de vale-presente (gift card) não entra como venda: a receita
+conta quando o vale é usado, no pedido pago com ele.
 
 **Já implantado, com os 3 webhooks registrados nas duas lojas**,
 apontando pra `https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`.

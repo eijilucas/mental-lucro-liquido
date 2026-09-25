@@ -74,6 +74,7 @@ interface ShopifyLineItem {
   price: string;
   total_discount?: string | null;
   discount_allocations?: { amount: string }[];
+  gift_card?: boolean;
 }
 
 interface ShopifyDiscountCode {
@@ -124,6 +125,13 @@ function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" {
   return names.some((n) => /pix/i.test(n)) ? "pix" : "cartao";
 }
 
+// Compra de vale-presente não é receita: é dinheiro adiantado que vira venda
+// quando o vale é usado — e aí o pedido pago com ele já entra normalmente.
+// Gravar a compra também contava a mesma receita duas vezes.
+function isGiftCard(item: ShopifyLineItem): boolean {
+  return item.gift_card === true || /gift\s*card/i.test(item.title ?? item.name ?? "");
+}
+
 interface ShopifyRefundLineItem {
   line_item_id: number;
   quantity: number;
@@ -131,6 +139,7 @@ interface ShopifyRefundLineItem {
 }
 
 interface ShopifyRefund {
+  id: number;
   order_id: number;
   refund_line_items: ShopifyRefundLineItem[];
 }
@@ -156,7 +165,7 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
   const paymentMethod = detectPaymentMethod(order);
 
   const rows = (order.line_items ?? [])
-    .filter((item) => !!item.product_id)
+    .filter((item) => !!item.product_id && !isGiftCard(item))
     .map((item) => ({
       shopify_order_id: order.id,
       shopify_line_item_id: item.id,
@@ -205,8 +214,8 @@ async function handleOrderPaid(supabase: SupabaseClient, order: ShopifyOrder, pr
 }
 
 // Produtos que nunca são peça de roupa de verdade (gift card, pingente)
-// — a venda continua sendo registrada normalmente, só não ganham uma
-// linha de custo automática.
+// não ganham linha de custo automática. Pingente continua entrando como
+// venda; gift card já nem chega aqui (ver isGiftCard).
 const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
 
 // Cria a linha da peça em `product_costs` na primeira venda que aparecer
@@ -245,43 +254,25 @@ async function handleOrderCancelled(supabase: SupabaseClient, order: { id: numbe
   if (shipError) throw shipError;
 }
 
+// A Shopify pode entregar o mesmo refunds/create mais de uma vez. Subtrair
+// direto do que está gravado descontava o reembolso de novo a cada reenvio,
+// então a conta roda no banco (aplicar_reembolso_shopify), que registra o id
+// do reembolso na mesma transação e ignora um id já aplicado. Lá também o
+// desconto acompanha as unidades que sobraram — devolveu metade das peças,
+// devolveu metade do cupom junto.
 async function handleRefundCreate(supabase: SupabaseClient, refund: ShopifyRefund) {
-  for (const item of refund.refund_line_items ?? []) {
-    const unitPrice = Number(item.line_item?.price ?? 0);
+  if (!refund.id) throw new Error("refunds/create sem id do reembolso");
 
-    const { data: existing, error: fetchError } = await supabase
-      .from("sale_revenue")
-      .select("quantity, gross_amount, discount_amount")
-      .eq("shopify_order_id", refund.order_id)
-      .eq("shopify_line_item_id", item.line_item_id)
-      .maybeSingle();
-    if (fetchError) throw fetchError;
-    if (!existing) continue;
-
-    const newQuantity = Math.max(0, existing.quantity - item.quantity);
-    const newGross = Math.max(0, Number(existing.gross_amount) - unitPrice * item.quantity);
-    // O desconto acompanha as unidades que sobraram — devolveu metade das
-    // peças, devolveu metade do cupom junto.
-    const newDiscount = existing.quantity > 0
-      ? (Number(existing.discount_amount) || 0) * (newQuantity / existing.quantity)
-      : 0;
-
-    if (newQuantity === 0) {
-      const { error } = await supabase
-        .from("sale_revenue")
-        .delete()
-        .eq("shopify_order_id", refund.order_id)
-        .eq("shopify_line_item_id", item.line_item_id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from("sale_revenue")
-        .update({ quantity: newQuantity, gross_amount: newGross, discount_amount: Number(newDiscount.toFixed(2)) })
-        .eq("shopify_order_id", refund.order_id)
-        .eq("shopify_line_item_id", item.line_item_id);
-      if (error) throw error;
-    }
-  }
+  const { error } = await supabase.rpc("aplicar_reembolso_shopify", {
+    p_refund_id: refund.id,
+    p_order_id: refund.order_id,
+    p_itens: (refund.refund_line_items ?? []).map((item) => ({
+      line_item_id: item.line_item_id,
+      quantity: item.quantity,
+      unit_price: Number(item.line_item?.price ?? 0),
+    })),
+  });
+  if (error) throw error;
 }
 
 Deno.serve(async (req) => {
