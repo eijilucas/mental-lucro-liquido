@@ -88,8 +88,11 @@ Código em `supabase/functions/shopify-webhook/index.ts`. Recebe
 uma vez, então não pode duplicar). Reembolso é aplicado pela função
 `aplicar_reembolso_shopify` no banco, que guarda o id de cada reembolso em
 `shopify_refunds_aplicados` — reenvio do mesmo reembolso não desconta de
-novo. Item de vale-presente (gift card) não entra como venda: a receita
-conta quando o vale é usado, no pedido pago com ele.
+novo — junto com os itens devolvidos, e o `orders/paid` desconta esses
+itens se chegar depois (reenvio ou entrega fora de ordem). Item de
+vale-presente (gift card) não entra como venda: a receita conta quando o
+vale é usado, no pedido pago com ele — e pedido pago só com vale entra como
+`vale_presente`, sem taxa de gateway, antifraude nem taxa da Shopify.
 
 **Já implantado, com os 3 webhooks registrados nas duas lojas**,
 apontando pra `https://vatoeojxpejefxqslgli.supabase.co/functions/v1/shopify-webhook`.

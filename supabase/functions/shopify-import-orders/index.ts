@@ -36,13 +36,13 @@ interface StoreProfile {
 
 const STORE_PROFILES: StoreProfile[] = [
   {
-    productLine: "basico",
+    productLine: "basico" as const,
     domain: Deno.env.get("SHOPIFY_STORE_DOMAIN_BASICO") ?? "",
     clientId: Deno.env.get("SHOPIFY_CLIENT_ID_BASICO") ?? "",
     clientSecret: Deno.env.get("SHOPIFY_CLIENT_SECRET_BASICO") ?? "",
   },
   {
-    productLine: "exclusivo",
+    productLine: "exclusivo" as const,
     domain: Deno.env.get("SHOPIFY_STORE_DOMAIN_EXCLUSIVO") ?? "",
     clientId: Deno.env.get("SHOPIFY_CLIENT_ID_EXCLUSIVO") ?? "",
     clientSecret: Deno.env.get("SHOPIFY_CLIENT_SECRET_EXCLUSIVO") ?? "",
@@ -122,7 +122,7 @@ interface SaleRow {
   discount_amount: number;
   sale_date: string;
   has_coupon: boolean;
-  payment_method: "pix" | "cartao";
+  payment_method: "pix" | "cartao" | "vale_presente";
 }
 
 // Desconto real do item: `price` da Shopify é sempre o preço de tabela, o
@@ -137,10 +137,14 @@ function lineDiscount(item: ShopifyLineItem): number {
 }
 
 // Qualquer gateway com "pix" no nome (o app que processa Pix varia por
-// loja) — o resto (cartão, boleto etc.) cai como "cartao".
-function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" {
+// loja). Pago só com vale-presente não passa por gateway nenhum, então não
+// paga taxa de cartão nem antifraude. O resto (cartão, boleto, vale + cartão)
+// cai como "cartao" — o pedido não diz quanto foi pago em cada meio.
+function detectPaymentMethod(order: ShopifyOrder): "pix" | "cartao" | "vale_presente" {
   const names = order.payment_gateway_names ?? [];
-  return names.some((n) => /pix/i.test(n)) ? "pix" : "cartao";
+  if (names.some((n) => /pix/i.test(n))) return "pix";
+  if (names.length > 0 && names.every((n) => /gift_?card/i.test(n))) return "vale_presente";
+  return "cartao";
 }
 
 function extractNextUrl(linkHeader: string | null): string | null {

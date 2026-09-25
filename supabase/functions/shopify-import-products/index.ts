@@ -56,14 +56,14 @@ interface StoreProfile {
 
 const STORE_PROFILES: StoreProfile[] = [
   {
-    productLine: "basico",
+    productLine: "basico" as const,
     domain: Deno.env.get("SHOPIFY_STORE_DOMAIN_BASICO") ?? "",
     clientId: Deno.env.get("SHOPIFY_CLIENT_ID_BASICO") ?? "",
     clientSecret: Deno.env.get("SHOPIFY_CLIENT_SECRET_BASICO") ?? "",
     collectionHandle: Deno.env.get("SHOPIFY_IMPORT_COLLECTION_HANDLE") ?? "basic-mm-drop",
   },
   {
-    productLine: "exclusivo",
+    productLine: "exclusivo" as const,
     domain: Deno.env.get("SHOPIFY_STORE_DOMAIN_EXCLUSIVO") ?? "",
     clientId: Deno.env.get("SHOPIFY_CLIENT_ID_EXCLUSIVO") ?? "",
     clientSecret: Deno.env.get("SHOPIFY_CLIENT_SECRET_EXCLUSIVO") ?? "",

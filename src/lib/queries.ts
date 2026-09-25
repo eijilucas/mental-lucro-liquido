@@ -25,7 +25,7 @@ export interface SaleMarginRow {
   product_line: ProductLine;
   piece_name: string;
   has_coupon: boolean;
-  payment_method: "pix" | "cartao";
+  payment_method: "pix" | "cartao" | "vale_presente";
   source: "shopify" | "external";
 }
 
