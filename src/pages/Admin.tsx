@@ -123,7 +123,7 @@ function ProductLinePanel({
           <div className="panel-title">{title}</div>
           <div className="panel-hint">
             A soma das colunas é o quanto custa produzir a peça — é isso que sai da venda antes de qualquer outra coisa.
-            Sacolinha e adesivo custam o mesmo pra toda peça, então ficaram na aba "Taxas de venda".
+            Sacolinha e adesivo vão um por pedido, então ficaram na aba "Taxas de venda".
           </div>
         </div>
       </div>
@@ -1042,7 +1042,7 @@ export function Admin() {
                       if (v !== null) setFeeRates({ ...feeRates, sacolinha: v });
                     }}
                   />
-                  <div className="suffix">custo fixo por peça, igual pra todas</div>
+                  <div className="suffix">uma por pedido, dividida entre as peças dele</div>
                 </div>
                 <div className="field">
                   <label>Adesivo</label>
@@ -1053,7 +1053,7 @@ export function Admin() {
                       if (v !== null) setFeeRates({ ...feeRates, adesivo: v });
                     }}
                   />
-                  <div className="suffix">custo fixo por peça, igual pra todas</div>
+                  <div className="suffix">um por pedido, dividido entre as peças dele</div>
                 </div>
               </div>
             </div>
@@ -1162,7 +1162,7 @@ export function Admin() {
           })()}
 
           {tab === "profit" && (() => {
-            const excluded = [/gift\s*card/i, /pingente/i];
+            const excluded = [/gift\s*card/i];
             const soldNames = new Set(pieceMargin.map((row) => row.sku));
             const unsold = productCosts.filter(
               (p) =>
@@ -1202,6 +1202,7 @@ export function Admin() {
                         </tr>
                       ) : (
                         unsold.map((p) => {
+                          // pior caso: pedido de uma peça só, que leva sacolinha e adesivo inteiros
                           const directCost = p.tecido + p.estampa + p.costura + p.outros_acabamentos
                             + (feeRates?.sacolinha ?? 0) + (feeRates?.adesivo ?? 0);
                           const preco = p.preco_venda;

@@ -53,6 +53,21 @@ tabela `admin_emails` **e** o cadastro precisa ter sido feito pelo painel
 do Supabase (Authentication → Sign In / Providers → Email → "Allow new
 users to sign up" está desligado).
 
+## Cupom que não paga comissão de influencer
+
+Todo cupom paga comissão de influencer, a não ser que esteja em
+`cupons_sem_comissao` (ex: cupom da própria loja). Não tem tela pra isso
+ainda — cadastra pelo SQL Editor:
+
+```
+insert into cupons_sem_comissao (code, motivo) values ('BEMVINDO10', 'cupom da loja');
+```
+
+Maiúscula/minúscula não importa. Só vale pra venda da Shopify gravada depois
+da migração `20260925000003` (é quando a venda passou a guardar o código do
+cupom); venda externa e venda anterior continuam pagando comissão sempre que
+tiveram cupom.
+
 ## Rodar localmente
 
 ```

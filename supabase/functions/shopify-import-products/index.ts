@@ -208,10 +208,10 @@ async function fetchAllProducts(profile: StoreProfile, accessToken: string, coll
   return products;
 }
 
-// Produtos que nunca são peça de roupa de verdade (não faz sentido
-// rastrear custo de produção deles) — ficam de fora da importação pra
-// sempre, mesmo que a Shopify tenha um novo desse tipo no futuro.
-const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i, /pingente/i];
+// Produto sem custo de produção pra rastrear (gift card) fica de fora da
+// importação pra sempre, mesmo que a Shopify tenha um novo desse tipo no
+// futuro. Pingente entra: tem custo de produção como qualquer peça.
+const EXCLUDED_NAME_PATTERNS = [/gift\s*card/i];
 
 async function importFromProfile(profile: StoreProfile): Promise<ProductCostStub[]> {
   const accessToken = await fetchAccessToken(profile);

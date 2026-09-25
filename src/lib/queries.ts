@@ -171,10 +171,10 @@ export async function fetchSaleMarginForRange(start: string, end: string) {
 export async function fetchSkuMarginForRange(start: string, end: string) {
   const rows = await fetchSaleMarginForRange(start, end);
 
-  // Mesma exclusão aplicada na criação automática de custo (gift card,
-  // pingente) — não são peça de roupa, não fazem sentido no ranking de
-  // margem por peça, mesmo que a venda em si continue registrada.
-  const excluded = [/gift\s*card/i, /pingente/i];
+  // Mesma exclusão aplicada na criação automática de custo: gift card não é
+  // peça, não faz sentido no ranking de margem por peça. Pingente entra — tem
+  // custo de produção como qualquer peça.
+  const excluded = [/gift\s*card/i];
 
   // Lucro por peça é o lucro líquido de verdade: já vem da view com custo da
   // peça, taxas de venda, marketing e fixo rateados e o resultado do frete.
