@@ -217,6 +217,8 @@ export async function fetchMonthlyOverhead(month = currentMonthStart()) {
     .from("monthly_overhead")
     .select("id, month, category, amount, is_marketing, allocation_method, manually_edited, recorrente")
     .eq("month", month)
+    // Marcador de gasto encerrado (ver deleteFixedOverheadForward) não é gasto.
+    .eq("encerrado", false)
     .order("is_marketing", { ascending: false })
     .returns<OverheadRow[]>();
   if (error) throw error;
@@ -246,6 +248,7 @@ export async function propagateFixedOverheadAmount(
     .eq("is_marketing", isMarketing)
     .eq("category", category)
     .eq("manually_edited", false)
+    .eq("encerrado", false)
     .gt("month", fromMonth);
   if (error) throw error;
 }
@@ -262,6 +265,7 @@ export async function propagateFixedOverheadMethod(
     .eq("is_marketing", isMarketing)
     .eq("category", category)
     .eq("manually_edited", false)
+    .eq("encerrado", false)
     .gt("month", fromMonth);
   if (error) throw error;
 }
@@ -272,13 +276,15 @@ export async function markOverheadManuallyEdited(id: string) {
 }
 
 // Apaga um gasto herdável desse mês pra frente (o passado fica no histórico).
+// Só apagar as linhas não basta: a herança recriava a categoria a partir do
+// mês anterior na próxima abertura do admin. A função do banco apaga e deixa
+// um marcador de encerrado no mês, na mesma transação.
 export async function deleteFixedOverheadForward(category: string, fromMonth: string, isMarketing = false) {
-  const { error } = await db()
-    .from("monthly_overhead")
-    .delete()
-    .eq("is_marketing", isMarketing)
-    .eq("category", category)
-    .gte("month", fromMonth);
+  const { error } = await db().rpc("encerrar_overhead_herdavel", {
+    p_category: category,
+    p_from_month: fromMonth,
+    p_is_marketing: isMarketing,
+  });
   if (error) throw error;
 }
 
